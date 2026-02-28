@@ -2,6 +2,8 @@ import os
 import json
 from google import genai
 from PIL import Image
+from deepface import DeepFace
+
 
 # Load secrets
 with open('secrets.json', 'r') as f:
@@ -22,3 +24,9 @@ response = client.models.generate_content(
 )
 
 print(response.text)
+
+
+def load_image(image_path):
+    # Take in imagine being sent every 4/5 secs and load it for processing
+    # Sorin
+    pass

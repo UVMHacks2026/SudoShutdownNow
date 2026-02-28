@@ -35,8 +35,9 @@ except Exception as e:
 
 
 """
-Formats the headers of an employee data csv file
-input: File modified
+Formats the headers of an employee data csv file and reads the file in.
+input: fileName = File being read from.
+returns: Dictionary of employees.
 
 """
 def formatReadEmployeeData(fileName):
@@ -124,6 +125,12 @@ def formatReadEmployeeData(fileName):
     except Exception as e:
         print(f"An unexpected error has occured!: {e}")
     
+"""
+Reads in an employee data csv file
+input: filename = File being read from.
+returns: Dictionary of employees.
+
+"""
 def readEmployeeData(fileName):
     try:
         with open(fileName, newline="") as csvFile:
@@ -134,19 +141,24 @@ def readEmployeeData(fileName):
     except Exception as e:
         print(f"An unexpected error has occured!: {e}")
 
+"""
+Loads employees into a dictionary.
+Inputs: reader = csv data, splitName = if names are formatted 'firstName, lastName' or 'fullName'.
+returuns: Employee dictionary.
+"""
 def loadEmployees(reader, splitName=False):
     employees = {}
 
     for row in reader:
         if splitName:
-            name = row["firstName"].split(" ")
+            fullName = row.get("firstName", "NULL NULL").split(" ")
 
-            if len(name) < 2:
+            if len(fullName) < 2:
                 firstName = ""
-                lastName = name[0]
+                lastName = fullName[0]
             else:
-                firstName = name[0]
-                lastName = name[1]
+                firstName = fullName[0]
+                lastName = fullName[1]
         
         else:
             firstName = row.get("firstName", "NULL")
@@ -163,9 +175,9 @@ def loadEmployees(reader, splitName=False):
 
 
         
-        employees[row["id"]] = Employee.Employee(firstName, lastName, id, imageId, email)
+        employees[id] = Employee.Employee(firstName, lastName, id, imageId, email)
     return employees
-        
+
 if __name__ == "__main__":
     employees = formatReadEmployeeData("EmployeeData.csv")
 

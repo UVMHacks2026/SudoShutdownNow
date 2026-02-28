@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # FastAPI Facial Recognition Service
+  api:
+    build:
+      context: ../../
+      dockerfile: facialRecognition/processStreamData/Dockerfile
+    container_name: sudoshutdown-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:mrAZjGkytlCIxDyYoGwGudmjvs0EssFKYwcRUar4lPitKxa5vreh7FRaOjUB6a2G@76.13.29.239:5432/postgres
+      - FACE_MODEL=buffalo_l
+      - GPU_ENABLED=false
+      - SIMILARITY_THRESHOLD=0.40
+    volumes:
+      # Cache InsightFace models to avoid re-downloading
+      - insightface_models:/root/.insightface
+    restart: unless-stopped
+    networks:
+      - sudoshutdown-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  insightface_models:
+
+networks:
+  sudoshutdown-network:
+    driver: bridge

@@ -172,13 +172,44 @@ Edit `sveltTo.py` to modify:
 
 For Python backend:
 ```bash
-pip install fastapi uvicorn opencv-python insightface psycopg2-binary cryptography
+pip install -r requirements.txt
 ```
 
 For JavaScript/Svelte:
 - Standard Svelte components (no extra deps needed)
 - WebSocket API (browser built-in)
 
-## License
+## Docker Deployment
 
-See root `LICENSE` file
+### Build Docker Image
+```bash
+cd /Users/wenaf/Hackathon26/SudoShutdownNow/facialRecognition/processStreamData
+docker build -t sudoshutdown-api .
+```
+
+### Run with Docker
+```bash
+docker run -p 8000:8000 sudoshutdown-api
+```
+
+### Run with Docker Compose
+```bash
+cd facialRecognition/processStreamData
+docker-compose up -d
+```
+
+The API will be available at: `http://localhost:8000`
+
+### Environment Variables
+Edit `docker-compose.yml` to configure:
+- `DATABASE_URL` - PostgreSQL connection string
+- `FACE_MODEL` - Face recognition model (default: buffalo_l)
+- `GPU_ENABLED` - Enable GPU acceleration (true/false)
+- `SIMILARITY_THRESHOLD` - Face matching threshold (default: 0.40)
+
+## Files
+
+- **Dockerfile** - Container image definition
+- **docker-compose.yml** - Docker Compose configuration
+- **requirements.txt** - Python dependencies
+- **.dockerignore** - Files to exclude from Docker build

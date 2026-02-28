@@ -10,7 +10,9 @@ import cv2
 # Import facial recognition system
 from facialRecognition.localFaceRec.secureFacialID import (
     init_db, load_users, save_user, compute_similarity, 
-    face_app, authorized_users, last_known_authorized_centers, conn
+    face_app, authorized_users, last_known_authorized_centers, conn,
+    match_face, delete_user, get_all_users, SIMILARITY_THRESHOLD,
+    FACE_MODEL, GPU_ENABLED
 )
 
 app = FastAPI()
@@ -39,6 +41,117 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+
+# --- SYSTEM STATUS ENDPOINTS ---
+@app.get("/api/system/status")
+async def system_status():
+    """Get system configuration and status"""
+    return {
+        "status": "ok",
+        "database_connected": conn is not None,
+        "face_model_loaded": face_app is not None,
+        "model_name": FACE_MODEL,
+        "gpu_enabled": GPU_ENABLED,
+        "similarity_threshold": SIMILARITY_THRESHOLD,
+        "registered_users_count": len(authorized_users)
+    }
+
+@app.get("/api/system/stats")
+async def system_stats():
+    """Get system statistics"""
+    try:
+        all_users = get_all_users() if conn else {}
+        return {
+            "status": "ok",
+            "total_registered_users": len(authorized_users),
+            "users_in_memory": list(authorized_users.keys()),
+            "users_in_database": list(all_users.keys()) if all_users else [],
+            "threshold": SIMILARITY_THRESHOLD
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "total_registered_users": len(authorized_users),
+            "users_in_memory": list(authorized_users.keys())
+        }
+
+# --- USER MANAGEMENT ENDPOINTS ---
+@app.get("/api/users")
+async def get_users():
+    """Get all registered users"""
+    try:
+        all_users = get_all_users() if conn else {}
+        return {
+            "status": "ok",
+            "count": len(authorized_users),
+            "users": all_users if all_users else {name: {} for name in authorized_users.keys()}
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "users": {name: {} for name in authorized_users.keys()}
+        }
+
+@app.get("/api/users/{user_name}")
+async def get_user(user_name: str):
+    """Get specific user information"""
+    if user_name in authorized_users:
+        return {
+            "status": "ok",
+            "name": user_name,
+            "registered": True,
+            "embedding_shape": [512],
+            "threshold": SIMILARITY_THRESHOLD
+        }
+    return {
+        "status": "not_found",
+        "message": f"User {user_name} not registered"
+    }
+
+@app.delete("/api/users/{user_name}")
+async def remove_user(user_name: str):
+    """Delete a registered user"""
+    if user_name not in authorized_users:
+        return {
+            "status": "error",
+            "message": f"User {user_name} not found"
+        }
+    
+    success = delete_user(user_name)
+    return {
+        "status": "ok" if success else "error",
+        "message": f"User {user_name} deleted successfully" if success else f"Failed to delete {user_name}",
+        "remaining_users": len(authorized_users)
+    }
+
+# --- FACE MATCHING ENDPOINT ---
+@app.post("/api/match")
+async def match_face_endpoint(embedding: dict):
+    """Match a face embedding against registered users"""
+    try:
+        if "embedding" not in embedding:
+            return {
+                "status": "error",
+                "message": "No embedding provided"
+            }
+        
+        emb_array = np.array(embedding["embedding"], dtype=np.float32)
+        matched_name, similarity = match_face(emb_array, SIMILARITY_THRESHOLD)
+        
+        return {
+            "status": "ok",
+            "matched_name": matched_name,
+            "similarity": float(similarity),
+            "threshold": SIMILARITY_THRESHOLD,
+            "authorized": matched_name is not None
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 # --- UTILITY FUNCTIONS ---
 def decode_base64_image(base64_string):

@@ -55,16 +55,16 @@ def formatReadEmployeeData(fileName):
                 response = ""
                 while attempts:
                     try:
-                        # The fields are supposes to look like ['firstName', 'lastName', 'id']
+                        # The fields are supposes to look like ['firstName', 'lastName', 'id', 'imageId', email']
                         prompt = """
                                     You are helping to rename the headers of a csv file in python.
-                                    Rename different versions of these field to firstName, lastName, id.
+                                    Rename different versions of these field to firstName, lastName, id, imageId, email.
                                     Keep fields in their original order.
                                     fields are case sensitive in camelCase, that means d in id is lowercase.
-                                    An example is ['imageId', 'otherfield', 'firstName', 'lastName', 'id'].
-                                    If there are clear first name and last name fields, Your response should be: firstName, lastName, id, otherField, imageId|noSplit.
+                                    An example is ['imageId', 'otherfield', 'firstName', 'lastName', 'id', email].
+                                    If there are clear first name and last name fields, Your response should be: firstName, lastName, id, otherField, imageId, email|noSplit.
                                     If the data only has one name field (first name and last name) combined, rename the field to firstName,
-                                    Your response should be: firstName, id, otherField, imageId|Split.
+                                    Your response should be: firstName, id, otherField, imageId, email|Split.
                                     Do not include any explanation, only the names in the correct order.
                                     The input header is:
                                 """
@@ -138,28 +138,36 @@ def loadEmployees(reader, splitName=False):
     employees = {}
 
     for row in reader:
-        if row["id"] in employees:
-            if DEBUG_PRINTS: print(f"Duplicate ID!: {row["id"]}")
-        else:
-            if row["id"]:
-                if splitName:
-                    name = row["firstName"].split(" ")
-                    if len(name) < 2:
-                        firstName = ""
-                        lastName = name[0]
-                    else:
-                        firstName = name[0]
-                        lastName = name[1]
+        if splitName:
+            name = row["firstName"].split(" ")
 
-                    employees[row["id"]] = Employee.Employee(firstName, lastName, row["id"], row["imageId"])
-                else:
-                    employees[row["id"]] = Employee.Employee(row["firstName"], row["lastName"], row["id"], row["imageId"])
+            if len(name) < 2:
+                firstName = ""
+                lastName = name[0]
             else:
-                if DEBUG_PRINTS: print("Missing ID!")
+                firstName = name[0]
+                lastName = name[1]
+        
+        else:
+            firstName = row.get("firstName", "NULL")
+            lastName = row.get("lastName", "NULL")
+        id = row.get("id")
+        if not id:
+            if DEBUG_PRINTS: print("Missing ID!")
+            continue
+        elif id in employees:
+            if DEBUG_PRINTS: print(f"Duplicate ID!{id}")
+            continue
+        imageId = row.get("imageId", "NULL")
+        email = row.get("email", "NULL")
+
+
+        
+        employees[row["id"]] = Employee.Employee(firstName, lastName, id, imageId, email)
     return employees
         
 if __name__ == "__main__":
-    employees = formatReadEmployeeData("EmployeeDataTest.csv")
+    employees = formatReadEmployeeData("EmployeeData.csv")
 
     if employees:
         for employee in employees:

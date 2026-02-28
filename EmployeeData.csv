@@ -1,11 +1,11 @@
-firstfame,lastname,id, imageid
-Jillian,Vance,EMP1001, 1
-Marcus,Thorne,EMP1002, 2
-Elena,Rodriguez,EMP1003, 3
-Kofi,Adjei,EMP1004, 4
-Sarah,Chen,EMP1005, 5
-Liam,O'Connor,EMP1006, 6
-Amara,Singh,EMP1007, 7
-Bradley,Whitford,EMP1008, 8
-Yuki,Tanaka,EMP1009, 9
-Sloane,Hargreeves,EMP1010, 10
+firstName,lastName,id,imageId,email
+Jillian,Vance,EMP1001, 1, @
+Marcus,Thorne,EMP1002, 2, @
+Elena,Rodriguez,EMP1003, 3, @
+Kofi,Adjei,EMP1004, 4, @
+Sarah,Chen,EMP1005, 5, @
+Liam,O'Connor,EMP1006, 6, @
+Amara,Singh,EMP1007, 7, @
+Bradley,Whitford,EMP1008, 8, @
+Yuki,Tanaka,EMP1009, 9, @
+Sloane,Hargreeves,EMP1010, 10, @

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from uuid import UUID
-from app.api.deps import get_db
+from app.api.deps import get_db, verify_auth
 from app.models import User
 from app.schemas.user import UserCreate, UserResponse
 
@@ -9,7 +9,11 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def create_user(user: UserCreate, db: Session = Depends(get_db)):
+def create_user(
+    user: UserCreate,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_auth)
+):
     """Create a new user."""
     existing_user = db.query(User).filter(User.email == user.email).first()
     if existing_user:
@@ -18,7 +22,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
             detail="User with this email already exists"
         )
     
-    db_user = User(email=user.email)
+    db_user = User(email=user.email, is_admin=user.is_admin)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -26,7 +30,11 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/email/{email}", response_model=UserResponse)
-def get_user_by_email(email: str, db: Session = Depends(get_db)):
+def get_user_by_email(
+    email: str,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_auth)
+):
     """Get a user by email."""
     user = db.query(User).filter(User.email == email).first()
     if not user:
@@ -38,7 +46,11 @@ def get_user_by_email(email: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{user_id}", response_model=UserResponse)
-def get_user_by_uuid(user_id: UUID, db: Session = Depends(get_db)):
+def get_user_by_uuid(
+    user_id: UUID,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_auth)
+):
     """Get a user by UUID."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -50,14 +62,21 @@ def get_user_by_uuid(user_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.get("", response_model=list[UserResponse])
-def list_users(db: Session = Depends(get_db)):
+def list_users(
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_auth)
+):
     """List all users."""
     users = db.query(User).all()
     return users
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(user_id: UUID, db: Session = Depends(get_db)):
+def delete_user(
+    user_id: UUID,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_auth)
+):
     """Delete a user by UUID."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:

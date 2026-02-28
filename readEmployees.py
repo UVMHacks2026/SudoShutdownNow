@@ -1,3 +1,5 @@
+# Author: Jonas Hemmett
+
 DEBUG_PRINTS = True
 
 import csv

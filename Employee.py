@@ -9,5 +9,29 @@ class Employee:
         self.imageId = imageId
         self.email = email
 
+    def getFirstName(self):
+        return self.firstName
+    
+    def setFirstName(self, firstName):
+        self.firstName = firstName
+ 
+    def getLastName(self):
+        return self.lastName   
+
+    def setLastName(self, lastName):
+        self.lastName = lastName
+    
+    def getId(self):
+        return self.id
+
+    def getImageId(self):
+        return self.imageId
+    
+    def getEmail(self):
+        return self.email
+
+    def setEmail(self, email):
+        self.email = email
+    
     def __str__(self):
         return f"{self.firstName} {self.lastName} (Payroll: {self.id}, Face: {self.imageId}), Email: {self.email}"

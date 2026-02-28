@@ -2,9 +2,9 @@ import csv
 
 import Employee
 
-Employees = {}
+employees = {}
 
 with open("EmployeeData.csv", newline="") as csvFile:
     reader = csv.DictReader(csvFile)
     for row in reader:
-        print(row["firstName"])
+        employees[row["id"]] = Employee.Employee(row["firstName"], row["lastName"], row["id"])

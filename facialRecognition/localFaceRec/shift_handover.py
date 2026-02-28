@@ -1,10 +1,11 @@
+import os
 import json
 import psycopg2
 from google import genai
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging (set to ERROR locally so it doesn't clutter the terminal UI)
+logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 # --- LOAD SECRETS ---
@@ -85,7 +86,6 @@ def save_shift_notes(outgoing_employee_id: str, raw_notes: str, incoming_employe
                 (outgoing_employee_id, incoming_employee_id, raw_notes, ai_summary)
             )
         conn.commit()
-        logger.info(f"Shift notes saved successfully for employee {outgoing_employee_id}")
         return True
     except psycopg2.Error as e:
         logger.error(f"Database error saving notes: {e}")
@@ -173,22 +173,60 @@ def mark_notes_as_read(note_id: int) -> bool:
             conn.close()
 
 
-# --- For Local Testing ---
+# --- INTERACTIVE TERMINAL APP ---
 if __name__ == "__main__":
-    print("Testing Gemini Shift Handover AI...")
-    print("Connecting to DB from secrets.json...")
+    print("\n" + "="*50)
+    print("🤖 SHIFT HANDOVER SYSTEM TERMINAL 🤖")
+    print("="*50)
     
-    # Simulate a rushed worker leaving notes
-    test_notes = "I couldn't finish the inventory audit. The back room still needs sweeping. Also tell Sarah that the delivery truck is coming at 2pm tomorrow instead of 10am. Oh and the register 3 is acting weird, don't use it."
-    
-    print("\n--- Worker Input ---")
-    print(test_notes)
-    
-    print("\n--- Generating AI Summary... ---")
-    summary = generate_handover_summary(test_notes)
-    print(summary)
-    
-    # Uncomment the lines below to actually test saving to the database
-    # print("\n--- Saving to Database ---")
-    # success = save_shift_notes("EMP_123", test_notes)
-    # print(f"Save success: {success}")
+    while True:
+        print("\nSelect an action:")
+        print("1. Clock Out (Leave shift notes)")
+        print("2. Clock In (Read pending shift notes)")
+        print("3. Exit")
+        
+        choice = input("\nEnter your choice (1/2/3): ").strip()
+        
+        if choice == '1':
+            print("\n--- CLOCKING OUT ---")
+            out_id = input("Enter your Employee ID (e.g., EMP123): ").strip()
+            notes = input("Enter your shift handover notes: \n> ").strip()
+            
+            print("\nProcessing and saving notes via Gemini...")
+            success = save_shift_notes(outgoing_employee_id=out_id, raw_notes=notes)
+            
+            if success:
+                print("✅ Notes successfully summarized and saved to the database!")
+            else:
+                print("❌ Failed to save notes. Check your database connection.")
+                
+        elif choice == '2':
+            print("\n--- CLOCKING IN ---")
+            in_id = input("Enter your Employee ID (e.g., EMP456): ").strip()
+            
+            print("\nChecking for pending shift notes...")
+            pending_notes = get_pending_handover_notes(incoming_employee_id=in_id)
+            
+            if not pending_notes:
+                print("✅ No pending notes for you! Have a great shift.")
+            else:
+                print(f"\n📬 You have {len(pending_notes)} unread handover note(s):\n")
+                
+                for i, note in enumerate(pending_notes, 1):
+                    print(f"--- Note #{i} (From: {note['from_employee']} at {note['timestamp']}) ---")
+                    print(f"{note['summary']}")
+                    print("-" * 40)
+                    
+                    mark_read = input(f"Mark Note #{i} as read? (y/n): ").strip().lower()
+                    if mark_read in ['y', 'yes']:
+                        if mark_notes_as_read(note['note_id']):
+                            print("✅ Note marked as read.")
+                        else:
+                            print("❌ Failed to mark note as read.")
+                            
+        elif choice == '3':
+            print("Goodbye!")
+            break
+            
+        else:
+            print("Invalid choice. Please enter 1, 2, or 3.")

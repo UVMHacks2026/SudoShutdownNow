@@ -1,3 +1,5 @@
+import dotenv
+
 class Employee:
     def __init__(self, firstName, lastName, id):
         self.firstName = firstName

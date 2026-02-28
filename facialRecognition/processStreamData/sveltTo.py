@@ -20,6 +20,7 @@ origins = [
     "http://cgswswk88cg04k4www8g8cgs.76.13.29.239.sslip.io",
     "http://localhost:5173",  # Svelte dev server
     "http://localhost:3000",
+    "http://localhost:8000"
 ]
 # --- CORS Middleware Setup ---
 app.add_middleware(
@@ -29,6 +30,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- HEALTH CHECK ENDPOINT ---
+@app.get("/")
+async def root():
+    return {"status": "ok", "message": "Facial Recognition API is running"}
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
 
 # --- UTILITY FUNCTIONS ---
 def decode_base64_image(base64_string):
@@ -112,8 +122,13 @@ async def websocket_endpoint(websocket: WebSocket):
                         print("Registration armed for next frame.")
                         
                     elif command_data.get("action") == "clear":
-                        conn.cursor().execute("DELETE FROM users")
-                        conn.commit()
+                        if conn:
+                            try:
+                                with conn.cursor() as cursor:
+                                    cursor.execute("DELETE FROM users")
+                                conn.commit()
+                            except Exception as e:
+                                print(f"Error clearing database: {e}")
                         authorized_users.clear()
                         last_known_authorized_centers.clear()
                         await websocket.send_json({
@@ -148,7 +163,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 name = f"User_{len(authorized_users) + 1}"
                 embedding = np.array(face_data["embedding"])
                 
-                if save_user(conn, name, embedding):
+                if save_user(name, embedding):
                     authorized_users[name] = embedding
                     await websocket.send_json({
                         "type": "registration_success",

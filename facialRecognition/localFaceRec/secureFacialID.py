@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # --- DATABASE CONFIGURATION ---
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/sudoshutdown")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:mrAZjGkytlCIxDyYoGwGudmjvs0EssFKYwcRUar4lPitKxa5vreh7FRaOjUB6a2G@76.13.29.239:5432/postgres")
 SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.40))
 FACE_MODEL = os.getenv("FACE_MODEL", "buffalo_l")  # lightweight model
 GPU_ENABLED = os.getenv("GPU_ENABLED", "false").lower() == "true"
@@ -36,24 +36,29 @@ def init_db():
         logger.info("Database connection established")
         
         # Create users table if it doesn't exist
-        with conn.cursor() as cursor:
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(255) UNIQUE NOT NULL,
-                    embedding BYTEA NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
-            
-            # Create index on name for faster lookups
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_users_name ON users(name);
-            """)
-            
-        conn.commit()
-        logger.info("Database tables initialized")
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR(255) UNIQUE NOT NULL,
+                        embedding BYTEA NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
+                
+                # Create index on name for faster lookups
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_users_name ON users(name);
+                """)
+                
+            conn.commit()
+            logger.info("Database tables initialized")
+        except psycopg2.Error as table_error:
+            logger.warning(f"Could not create/verify table schema: {table_error}")
+            logger.info("Proceeding with existing database schema")
+            conn.commit()
     
     except psycopg2.Error as e:
         logger.error(f"Database connection error: {e}")
@@ -70,6 +75,7 @@ def load_users():
         
     try:
         with conn.cursor() as cursor:
+            # Try to load with current schema
             cursor.execute("SELECT name, embedding FROM users;")
             rows = cursor.fetchall()
             
@@ -84,10 +90,10 @@ def load_users():
         logger.info(f"Total users loaded: {len(authorized_users)}")
         
     except psycopg2.Error as e:
-        logger.error(f"Error loading users: {e}")
+        logger.warning(f"Error loading users (schema mismatch or table not found): {e}")
+        logger.warning("Continuing with empty user database")
         if conn:
             conn.rollback()
-        raise
 
 
 def save_user(name: str, embedding: np.ndarray) -> bool:
@@ -275,5 +281,5 @@ if __name__ != "__main__":
         load_users()
         logger.info("Facial recognition system initialized successfully")
     except Exception as e:
-        logger.error(f"Failed to initialize facial recognition system: {e}")
-        raise
+        logger.warning(f"Failed to initialize facial recognition system: {e}")
+        logger.warning("System will run in degraded mode without database connectivity")

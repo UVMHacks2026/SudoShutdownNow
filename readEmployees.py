@@ -10,9 +10,12 @@ def readEmployees(fileName):
             reader = csv.DictReader(csvFile)
             for row in reader:
                 if row["id"] in employees:
-                    print(f"Duplicate ID: {row["id"]}")
+                    print(f"Duplicate ID!: {row["id"]}")
                 else:
-                    employees[row["id"]] = Employee.Employee(row["firstName"], row["lastName"], row["id"])
+                    if row["id"]:
+                        employees[row["id"]] = Employee.Employee(row["firstName"], row["lastName"], row["id"])
+                    else:
+                        print("Missing ID!")
     except FileNotFoundError:
         print(f"Could not load the file: {fileName}")
     except Exception as e:
@@ -20,3 +23,5 @@ def readEmployees(fileName):
 
 if __name__ == "__main__":
     readEmployees("EmployeeData.csv")
+    for e in employees:
+        print(e)

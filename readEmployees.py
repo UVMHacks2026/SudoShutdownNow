@@ -5,6 +5,7 @@ DEBUG_PRINTS = True
 import csv
 import Employee
 import time
+from datetime import datetime
 
 # Imports and configures Gemini. 
 # If this can't be done other functions will work but Gemini based functions will be disabled.
@@ -174,15 +175,25 @@ def loadEmployees(reader, splitName=False):
             continue
         imageId = row.get("imageId", "NULL")
         email = row.get("email", "NULL")
+        shifts = row.get("shifts")
+        shiftsSplit = shifts.split(",")
+        shiftsOut = []
+        formatString = "%Y-%m-%d %H:%M:%S"
+        for shift in shiftsSplit:
+            shift = shift.strip().split(" to ")
+            start = datetime.strptime(shift[0], formatString)
+            end = datetime.strptime(shift[1], formatString)
+            shiftsOut.append((start, end))
 
 
         
-        employees[id] = Employee.Employee(firstName, lastName, id, imageId, email)
+        employees[id] = Employee.Employee(firstName, lastName, id, imageId, email, shiftsOut)
     return employees
 
 if __name__ == "__main__":
-    employees = formatReadEmployeeData("EmployeeData.csv")
+    employees = readEmployeeData("EmployeeData.csv")
 
     if employees:
         for employee in employees:
             print(employees[employee])
+            print(employees[employee].getShifts())

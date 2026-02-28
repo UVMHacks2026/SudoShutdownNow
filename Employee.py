@@ -2,13 +2,15 @@ import dotenv
 
 class Employee:
     # Constructor for Employee Object
-    def __init__(self, firstName, lastName, id, imageId, email):
+    def __init__(self, firstName, lastName, id, imageId, email, shifts = []):
         self.firstName = firstName
         self.lastName = lastName
         self.id = id
         self.imageId = imageId
         self.email = email
-        self.shifts = 
+        self.shifts = shifts
+
+
 
     def getFirstName(self):
         return self.firstName
@@ -33,6 +35,12 @@ class Employee:
 
     def setEmail(self, email):
         self.email = email
+
+    def getShifts(self):
+        return self.shifts
+    
+    def addShift(self, shift):
+        self.shifts.append(shift)
     
     def __str__(self):
         return f"{self.firstName} {self.lastName} (Payroll: {self.id}, Face: {self.imageId}), Email: {self.email}"

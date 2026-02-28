@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from uuid import UUID
 from app.api.deps import get_db, verify_auth
 from app.models import User
 from app.schemas.user import UserCreate, UserResponse
@@ -15,14 +14,22 @@ def create_user(
     _: None = Depends(verify_auth)
 ):
     """Create a new user."""
+    # Check if user with same id already exists
+    existing_user_id = db.query(User).filter(User.id == user.id).first()
+    if existing_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User with this ID already exists"
+        )
+
     existing_user = db.query(User).filter(User.email == user.email).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User with this email already exists"
         )
-    
-    db_user = User(email=user.email)
+
+    db_user = User(id=user.id, email=user.email)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -46,12 +53,12 @@ def get_user_by_email(
 
 
 @router.get("/{user_id}", response_model=UserResponse)
-def get_user_by_uuid(
-    user_id: UUID,
+def get_user_by_id(
+    user_id: str,
     db: Session = Depends(get_db),
     _: None = Depends(verify_auth)
 ):
-    """Get a user by UUID."""
+    """Get a user by ID."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(
@@ -73,11 +80,11 @@ def list_users(
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
-    user_id: UUID,
+    user_id: str,
     db: Session = Depends(get_db),
     _: None = Depends(verify_auth)
 ):
-    """Delete a user by UUID."""
+    """Delete a user by ID."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(

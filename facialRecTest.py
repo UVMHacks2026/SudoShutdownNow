@@ -5,6 +5,9 @@ from PIL import Image
 from deepface import DeepFace
 
 
+db_path = "path_to_your_database"  # where image files will be stored for recognition
+
+
 # Load secrets
 with open('secrets.json', 'r') as f:
     secrets = json.load(f)
@@ -29,4 +32,5 @@ print(response.text)
 def load_image(image_path):
     # Take in imagine being sent every 4/5 secs and load it for processing
     # Sorin
+    image = DeepFace.find(img_path=img, db_path="path_to_your_database")
     pass

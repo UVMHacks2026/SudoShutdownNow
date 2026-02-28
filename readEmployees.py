@@ -197,3 +197,9 @@ if __name__ == "__main__":
         for employee in employees:
             print(employees[employee])
             print(employees[employee].getShifts())
+        
+    employees = readEmployeeData("EmployeeData.csv")
+    if employees:
+        for employee in employees:
+            print(employees[employee])
+            print(employees[employee].getShifts())

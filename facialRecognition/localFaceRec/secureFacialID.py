@@ -10,7 +10,7 @@ from ultralytics import YOLO
 
 # --- 1. CONFIGURATION & SECRETS ---
 secrets_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'gemeniFacialAnalysis', 'secrets.json')
-db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'users.db')
+db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'facial_data.db')
 
 try:
     with open(secrets_path, 'r') as f:

@@ -164,16 +164,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 
                 register_next_face = False
             else:
-<<<<<<< HEAD
-                base_64_data = data
-
-    except Exception as e:
-        print(f"WebSocket connection error: {e}")
-=======
                 # Send facial recognition results back to Svelte
                 result["type"] = "face_detection"
                 await websocket.send_json(result)
                 
     except WebSocketDisconnect:
         print("WebSocket connection closed")
->>>>>>> 38e06a5717128074e2ff2e620f13d2962c8dd1c8

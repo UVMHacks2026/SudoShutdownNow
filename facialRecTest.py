@@ -1,12 +1,16 @@
 import os
+import json
 from google import genai
 from PIL import Image
-# Initialize the client (Make sure your GEMINI_API_KEY environment variable is set)
-# export GEMINI_API_KEY="your-api-key-here"
-client = genai.Client(api_key="AIzaSyCr4liDQWEeFor_PT5Vr-7KkmRtMZvyL1Y")
 
-# Load the image you want to analyze
-# Replace 'faces.jpg' with the path to your image file
+# Load secrets
+with open('secrets.json', 'r') as f:
+    secrets = json.load(f)
+
+# Initialize the client
+client = genai.Client(api_key=secrets.get("GEMINI_API_KEY"))
+
+# Load image to analyze
 image = Image.open('faces.jpg')
 
 # Define your prompt focusing on analysis, not recognition

@@ -26,7 +26,7 @@ try:
         geminiWorks = False
         pass
 
-    MODEL_ID = "gemini-2.0-flash"
+    MODEL_ID = "gemini-2.5-flash"
 except Exception as e:
     print(f"Gemini functionality could not be imported!: {e}")
     geminiWorks = False
@@ -66,9 +66,10 @@ def formatReadEmployeeData(fileName):
                                     An example is ['otherfield', 'firstName', 'lastName', 'id'].
                                     The input header is:
                                 """
+                        if DEBUG_PRINTS: print("Before response")
                         response = client.models.generate_content(contents= prompt + str(reader.fieldnames), model=MODEL_ID)
                     except errors.ClientError as e:
-                        if DEBUG_PRINTS: print(f"Gemini error code: {e.code}")
+                        if DEBUG_PRINTS: print(f"Gemini error code: {e}")
                         if e.code == 429 and attempts:
                             if "limit: 0" in str(e):
                                 attempts = 0
@@ -96,8 +97,14 @@ def formatReadEmployeeData(fileName):
                             geminiWorks = False
                             attempts = 0
                             if DEBUG_PRINTS: 
-
                                 print(f"Gemini Disabled!")
+                        
+                    except Exception as e:
+                        if DEBUG_PRINTS: print(e)
+                        geminiWorks = False
+                        attempts = 0
+                        if DEBUG_PRINTS: 
+                            print(f"Gemini Disabled!")
 
                 
                 

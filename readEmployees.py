@@ -176,11 +176,13 @@ def loadEmployees(reader, splitName=False):
         imageId = row.get("imageId", "NULL")
         email = row.get("email", "NULL")
         shifts = row.get("shifts")
-        shiftsSplit = shifts.split(",")
+        print(shifts)
         shiftsOut = []
-        formatString = "%Y-%m-%d %H:%M:%S"
-        for shift in shiftsSplit:
-            if shift:
+
+        if shifts.strip():
+            shiftsSplit = shifts.split(",")
+            formatString = "%Y-%m-%d %H:%M:%S"
+            for shift in shiftsSplit:
                 shift = shift.strip().split(" to ")
                 start = datetime.strptime(shift[0], formatString)
                 end = datetime.strptime(shift[1], formatString)
@@ -192,15 +194,36 @@ def loadEmployees(reader, splitName=False):
     return employees
 
 if __name__ == "__main__":
-    employees = formatReadEmployeeData("EmployeeDataTest.csv")
+    running = True
+    while running:
+        fileName = input("Please enter the file name you would like to read in (E.G. EmployeeData.csv): ")
+        readMode = ""
 
-    if employees:
-        for employee in employees:
-            print(employees[employee])
-            print(employees[employee].getShifts())
+        while True:
+            readMode = input("Would you like to use Gemini to format your file? (Enter y or n): ")
+
+            if readMode == "y" or readMode == "n":
+                break
+            else:
+                print("Please entry a valid choice")
         
-    employees = readEmployeeData("EmployeeData.csv")
-    if employees:
-        for employee in employees:
-            print(employees[employee])
-            print(employees[employee].getShifts())
+        employees = ""
+        if readMode == "y":
+            employees = formatReadEmployeeData(fileName)
+        else:
+            employees = readEmployeeData(fileName)
+
+        if employees:
+            for employee in employees:
+                print(employees[employee])
+                print(employees[employee].getShifts())
+        
+        while True:
+            exit = input("Would you like to enter another file? (Enter y or n): ")
+
+            if exit == "n":
+                running = False
+                break
+            else:
+                break
+        

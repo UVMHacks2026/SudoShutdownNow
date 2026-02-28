@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 from typing import Dict, Tuple, Optional
 import logging
-from insightface.app import FaceAnalysis
+
 
 # Load environment variables
 load_dotenv()

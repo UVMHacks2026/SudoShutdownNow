@@ -7,7 +7,6 @@ import psycopg2
 import pickle
 import base64
 from cryptography.fernet import Fernet
-from ultralytics import YOLO
 
 class FacialSecuritySystem:
     def __init__(self):
@@ -35,12 +34,6 @@ class FacialSecuritySystem:
         print("[SecuritySystem] Loading InsightFace model (Memory Optimized)...")
         self.face_app = FaceAnalysis(name='buffalo_l', allowed_modules=['detection', 'recognition'], providers=['CPUExecutionProvider'])
         self.face_app.prepare(ctx_id=0, det_size=(640, 640))
-
-        print("[SecuritySystem] Loading YOLOv8n Body Tracking model...")
-        self.body_model = YOLO("yolov8n.pt") 
-        
-        # State tracking for fallback system
-        self.last_known_authorized_centers = {} # name -> (x,y)
         
     def _init_db(self):
         try:
@@ -162,16 +155,9 @@ class FacialSecuritySystem:
             "faces_detected": 0
         }
         
-        # 1. Run YOLO Body Detection
-        body_results = self.body_model(frame, classes=[0], verbose=False)
-        bodies = []
-        if len(body_results) > 0:
-            bodies = body_results[0].boxes.xyxy.cpu().numpy().astype(int)
-            
-        # 2. Run Facial Detection
+        # 1. Run Facial Detection
         faces = self.face_app.get(frame)
         response_data["faces_detected"] = len(faces)
-        currently_seen_authorized = []
 
         # Process all faces
         for face in faces:
@@ -189,37 +175,10 @@ class FacialSecuritySystem:
                     best_match_name = name
                     
             if best_match_name:
-                currently_seen_authorized.append(best_match_name)
-                self.last_known_authorized_centers[best_match_name] = face_center
-                
                 # We found an employee!
                 response_data["is_employee_present"] = True
                 response_data["employee_name"] = best_match_name
                 response_data["confidence"] = best_sim
-
-        # 3. Fallback Body Tracking Logic
-        # If no face is seen, check if their body is still in the frame
-        if len(self.authorized_users) > 0 and len(currently_seen_authorized) == 0:
-            
-            for body_bbox in bodies:
-                body_center = (int((body_bbox[0] + body_bbox[2])/2), int((body_bbox[1] + body_bbox[3])/2))
-                
-                assumed_name = None
-                closest_dist = float('inf')
-                
-                for name, last_face_center in self.last_known_authorized_centers.items():
-                    dist = np.sqrt((body_center[0] - last_face_center[0])**2 + (body_center[1] - last_face_center[1])**2)
-                    if dist < 300 and dist < closest_dist:
-                        closest_dist = dist
-                        assumed_name = name
-                
-                if assumed_name:
-                    # We assume the employee is still present based on body location
-                    self.last_known_authorized_centers[assumed_name] = body_center
-                    response_data["is_employee_present"] = True
-                    response_data["employee_name"] = assumed_name
-                    response_data["system_status"] = "FALLBACK_TRACKING"
-                    break # Track one employee for now
 
         return response_data
 

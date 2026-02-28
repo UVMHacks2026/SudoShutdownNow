@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 import io
 
+# Need to update to active facial recognition code, this is test for now
+import facialRecTest  
+
 app = FastAPI()
 
 origins = [
@@ -25,4 +28,7 @@ async def upload_image(file: UploadFile = File(...)):
         contents = await file.read()
         image = Image.open(io.BytesIO(contents))
         # Process the image as needed (e.g., save, analyze, etc.)
+        # Call your facial recognition function here with the image
+        
+
         return {"filename": file.filename, "content_type": file.content_type}

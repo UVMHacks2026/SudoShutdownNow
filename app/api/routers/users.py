@@ -22,7 +22,7 @@ def create_user(
             detail="User with this email already exists"
         )
     
-    db_user = User(email=user.email, is_admin=user.is_admin)
+    db_user = User(email=user.email)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)

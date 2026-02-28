@@ -10,8 +10,6 @@ class Employee:
         self.email = email
         self.shifts = shifts
 
-
-
     def getFirstName(self):
         return self.firstName
     

@@ -1,13 +1,13 @@
 from pydantic import BaseModel, EmailStr
-from uuid import UUID
 
 
 class UserCreate(BaseModel):
+    id: str
     email: EmailStr
 
 
 class UserResponse(BaseModel):
-    id: UUID
+    id: str
     email: str
 
     class Config:

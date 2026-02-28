@@ -1,3 +1,5 @@
+# File to allow a user to create their account
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -10,18 +12,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# DATABASE FOR USERS
-# Fake user for testing
-users_db = {
-    "manager@burlingtonbuilds.com": {
-        "email": "employee@burlingtonbuilds.com",
-        "first_name": "Jane",
-        "last_name": "Doe",
-        "picture": "https://ui-avatars.com/api/?name=Jane+Doe", # Generates a fake profile pic
-        "role": "employee"
-    }
-}
 
 @app.get("/api/users/{email}")
 async def get_user(email: str):

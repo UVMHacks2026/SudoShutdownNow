@@ -1,19 +1,5 @@
-from fastapi import FastAPI
-import numpy as np # for storing face encodings
+from app.main import app
 
-
-app = FastAPI()
-
-@app.get("/")
-
-def root():
-    return {"message": "Hello World"}
-
-def get_data():
-    #TODO: Implement data retrieval logic here
-    
-    # Get the employee
-    return {"data": "This is some data"}
-
-def process_data(data):
-    pass
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

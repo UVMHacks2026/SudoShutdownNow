@@ -60,11 +60,11 @@ def formatReadEmployeeData(fileName):
                                     You are helping to rename the headers of a csv file in python.
                                     Rename different versions of these field to firstName, lastName, id.
                                     Keep fields in their original order.
-                                    An example is ['imageID', 'otherfield', 'firstName', 'lastName', 'id'].
+                                    fields are case sensitive in camelCase, that means d in id is lowercase.
+                                    An example is ['imageId', 'otherfield', 'firstName', 'lastName', 'id'].
                                     If there are clear first name and last name fields, Your response should be: firstName, lastName, id, otherField, imageId|noSplit.
-                                    If the data only has one name field (first name and last name) combined, rename the field to firstName and add a field to the right called lastName,
-                                    Your response should be: firstName, lastName, id, otherField, imageId|Split.
-
+                                    If the data only has one name field (first name and last name) combined, rename the field to firstName,
+                                    Your response should be: firstName, id, otherField, imageId|Split.
                                     Do not include any explanation, only the names in the correct order.
                                     The input header is:
                                 """
@@ -113,7 +113,9 @@ def formatReadEmployeeData(fileName):
                 if geminiWorks and response:  
                     if DEBUG_PRINTS: print(response.text.strip())
                     reader.fieldnames = [name.strip() for name in response.text.strip().split("|")[0].split(",")]
-            return loadEmployees(reader)
+            splitName = True if response.text.strip().split("|")[1] == "Split" else False
+
+            return loadEmployees(reader, splitName)
 
                     
 
@@ -140,7 +142,18 @@ def loadEmployees(reader, splitName=False):
             if DEBUG_PRINTS: print(f"Duplicate ID!: {row["id"]}")
         else:
             if row["id"]:
-                employees[row["id"]] = Employee.Employee(row["firstName"], row["lastName"], row["id"], row["imageId"])
+                if splitName:
+                    name = row["firstName"].split(" ")
+                    if len(name) < 2:
+                        firstName = ""
+                        lastName = name[0]
+                    else:
+                        firstName = name[0]
+                        lastName = name[1]
+
+                    employees[row["id"]] = Employee.Employee(firstName, lastName, row["id"], row["imageId"])
+                else:
+                    employees[row["id"]] = Employee.Employee(row["firstName"], row["lastName"], row["id"], row["imageId"])
             else:
                 if DEBUG_PRINTS: print("Missing ID!")
     return employees

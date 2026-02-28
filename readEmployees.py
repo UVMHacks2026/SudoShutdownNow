@@ -191,7 +191,7 @@ def loadEmployees(reader, splitName=False):
     return employees
 
 if __name__ == "__main__":
-    employees = readEmployeeData("EmployeeData.csv")
+    employees = formatReadEmployeeData("EmployeeDataTest.csv")
 
     if employees:
         for employee in employees:

@@ -1,11 +1,6 @@
-name, id,image_id,emailAddress
-Jillian Vance,EMP1001, 1, @
-Marcus Thorne,EMP1002, 2, @
-Elena Rodriguez,EMP1003, 3, @
-Kofi Adjei,EMP1004, 4, @
-Sarah Chen,EMP1005, 5, @
-Liam O'Connor,EMP1006, 6, @
-Amara Singh,EMP1007, 7, @
-Bradley Whitford,EMP1008, 8, @
-Yuki Tanaka,EMP1009, 9, @
-Sloane Hargreeves,EMP1010, 10, @
+Name,id,image_id,personal_email,shifts_worked
+Jillian Vance,EMP1001,1,jillian.vance@company.com,"2026-1-1 9:0:0 to 2026-1-1 17:0:0, 2026-1-2 9:1:0 to 2026-1-2 17:3:0"
+Marcus Chen,EMP1002,2,marcus.chen@company.com,"2026-1-1 08:30:0 to 2026-1-1 16:30:0, 2026-1-3 08:30:0 to 2026-1-3 16:30:0"
+Elena Rodriguez,EMP1003,3,elena.rod@company.com,"2026-1-2 10:0:0 to 2026-1-2 18:0:0, 2026-1-4 10:0:0 to 2026-1-4 18:0:0"
+Amara Okoro,EMP1004,4,amara.okoro@company.com,"2026-1-1 22:0:0 to 2026-1-2 06:0:0, 2026-1-2 22:0:0 to 2026-1-3 06:0:0"
+Silas Vanderbilt,EMP1005,5,s.vanderbilt@company.com,"2026-1-5 09:0:0 to 2026-1-5 17:0:0"

@@ -7,6 +7,9 @@ import psycopg2
 import pickle
 from cryptography.fernet import Fernet
 from ultralytics import YOLO
+import time
+import resource
+import sys
 
 # --- 1. CONFIGURATION & SECRETS ---
 secrets_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'gemeniFacialAnalysis', 'secrets.json')
@@ -108,11 +111,16 @@ print("--------------------\n")
 last_known_authorized_centers = {} # name -> (x,y)
 body_tracking_active_for = None 
 
+# Performance tracking
+session_start_time = time.time()
+frame_count = 0
+
 while True:
     ret, frame = cap.read()
     if not ret:
         break
         
+    frame_count += 1
     display_frame = frame.copy()
     
     # 1. Run YOLO Body Detection
@@ -223,3 +231,20 @@ while True:
 cap.release()
 conn.close()
 cv2.destroyAllWindows()
+
+# --- 4. PERFORMANCE REVIEW ---
+session_total_time = time.time() - session_start_time
+if session_total_time > 0:
+    avg_fps = frame_count / session_total_time
+    peak_mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    # MacOS ru_maxrss is in bytes, Linux is in KB
+    peak_mem_mb = peak_mem / (1024 * 1024) if sys.platform == "darwin" else peak_mem / 1024
+    
+    print("\n" + "="*40)
+    print("      SESSION PERFORMANCE REVIEW")
+    print("="*40)
+    print(f"Total Frames Processed: {frame_count}")
+    print(f"Total Runtime:          {session_total_time:.2f} seconds")
+    print(f"Average Throughput:     {avg_fps:.2f} FPS")
+    print(f"Peak Memory Usage:      {peak_mem_mb:.2f} MB")
+    print("="*40 + "\n")

@@ -33,7 +33,7 @@ def get_db_connection():
 
 
 def setup_users_table():
-    """Connect to PostgreSQL and create the employees table with the requested schema."""
+    #Connect to PostgreSQL and create the employees table with the requested schema.
     conn = get_db_connection()
     if not conn: return
 
@@ -42,7 +42,7 @@ def setup_users_table():
         
         print("\n⏳ Setting up database tables...")
 
-        # Create the table matching your exact requirements
+        # Create the table
         create_table_query = """
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,                     -- Internal DB ID
@@ -75,7 +75,6 @@ def setup_users_table():
 
 
 def add_new_employee():
-    """Interactive prompt to add a new employee to the database."""
     print("\n--- 📝 ADD NEW EMPLOYEE ---")
     employee_id = input("Enter Employee ID (e.g., EMP001): ").strip()
     first_name = input("Enter First Name: ").strip()

@@ -1,8 +1,11 @@
+# Author: Jonas Hemmett
+
 DEBUG_PRINTS = True
 
 import csv
 import Employee
 import time
+from datetime import datetime
 
 # Imports and configures Gemini. 
 # If this can't be done other functions will work but Gemini based functions will be disabled.
@@ -35,8 +38,9 @@ except Exception as e:
 
 
 """
-Formats the headers of an employee data csv file
-input: File modified
+Formats the headers of an employee data csv file and reads the file in.
+input: fileName = File being read from.
+returns: Dictionary of employees.
 
 """
 def formatReadEmployeeData(fileName):
@@ -55,16 +59,16 @@ def formatReadEmployeeData(fileName):
                 response = ""
                 while attempts:
                     try:
-                        # The fields are supposes to look like ['firstName', 'lastName', 'id', 'imageId', email']
+                        # The fields are supposes to look like ['firstName', 'lastName', 'id', 'imageId', 'email', 'shifts']
                         prompt = """
                                     You are helping to rename the headers of a csv file in python.
-                                    Rename different versions of these field to firstName, lastName, id, imageId, email.
+                                    Rename different versions of these field to firstName, lastName, id, imageId, email, shifts.
                                     Keep fields in their original order.
                                     fields are case sensitive in camelCase, that means d in id is lowercase.
-                                    An example is ['imageId', 'otherfield', 'firstName', 'lastName', 'id', email].
-                                    If there are clear first name and last name fields, Your response should be: firstName, lastName, id, otherField, imageId, email|noSplit.
+                                    An example is ['imageId', 'otherfield', 'firstName', 'lastName', 'id', 'email', 'shifts'].
+                                    If there are clear first name and last name fields, Your response should be: firstName, lastName, id, otherField, imageId, email, shifts|noSplit.
                                     If the data only has one name field (first name and last name) combined, rename the field to firstName,
-                                    Your response should be: firstName, id, otherField, imageId, email|Split.
+                                    Your response should be: firstName, id, otherField, imageId, email, shifts|Split.
                                     Do not include any explanation, only the names in the correct order.
                                     The input header is:
                                 """
@@ -124,6 +128,12 @@ def formatReadEmployeeData(fileName):
     except Exception as e:
         print(f"An unexpected error has occured!: {e}")
     
+"""
+Reads in an employee data csv file
+input: filename = File being read from.
+returns: Dictionary of employees.
+
+"""
 def readEmployeeData(fileName):
     try:
         with open(fileName, newline="") as csvFile:
@@ -134,19 +144,24 @@ def readEmployeeData(fileName):
     except Exception as e:
         print(f"An unexpected error has occured!: {e}")
 
+"""
+Loads employees into a dictionary.
+Inputs: reader = csv data, splitName = if names are formatted 'firstName, lastName' or 'fullName'.
+returuns: Employee dictionary.
+"""
 def loadEmployees(reader, splitName=False):
     employees = {}
 
     for row in reader:
         if splitName:
-            name = row["firstName"].split(" ")
+            fullName = row.get("firstName", "NULL NULL").split(" ")
 
-            if len(name) < 2:
+            if len(fullName) < 2:
                 firstName = ""
-                lastName = name[0]
+                lastName = fullName[0]
             else:
-                firstName = name[0]
-                lastName = name[1]
+                firstName = fullName[0]
+                lastName = fullName[1]
         
         else:
             firstName = row.get("firstName", "NULL")
@@ -160,15 +175,25 @@ def loadEmployees(reader, splitName=False):
             continue
         imageId = row.get("imageId", "NULL")
         email = row.get("email", "NULL")
+        shifts = row.get("shifts")
+        shiftsSplit = shifts.split(",")
+        shiftsOut = []
+        formatString = "%Y-%m-%d %H:%M:%S"
+        for shift in shiftsSplit:
+            shift = shift.strip().split(" to ")
+            start = datetime.strptime(shift[0], formatString)
+            end = datetime.strptime(shift[1], formatString)
+            shiftsOut.append((start, end))
 
 
         
-        employees[row["id"]] = Employee.Employee(firstName, lastName, id, imageId, email)
+        employees[id] = Employee.Employee(firstName, lastName, id, imageId, email, shiftsOut)
     return employees
-        
+
 if __name__ == "__main__":
-    employees = formatReadEmployeeData("EmployeeData.csv")
+    employees = readEmployeeData("EmployeeData.csv")
 
     if employees:
         for employee in employees:
             print(employees[employee])
+            print(employees[employee].getShifts())

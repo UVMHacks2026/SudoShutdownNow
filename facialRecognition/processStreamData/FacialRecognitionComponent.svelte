@@ -55,24 +55,65 @@
 				const data = JSON.parse(event.data);
 				console.log('Response from server:', data);
 
-				if (data.type === 'face_detection') {
-					detectionResults = data;
-					faceDetected = data.face_count > 0;
-				} else if (data.type === 'registration_success') {
-					alert(`✓ Face registered for ${data.name}`);
-					registerMode = false;
-				} else if (data.type === 'registration_error') {
-					alert(`✗ Registration failed: ${data.message}`);
-					registerMode = false;
-				} else if (data.type === 'command_response') {
-					if (data.action === 'clear') {
-						alert('Database cleared');
-					}
-				}
-			} catch (error) {
-				console.error('Error parsing response:', error);
+			// Handle clock-in/clock-out success
+			if (data.type === 'clock_success') {
+				faceDetected = true;
+				detectionResults = {
+					type: 'clock_verification',
+					employee: data.employee,
+					clock: data.clock,
+					similarity: data.similarity,
+					success: true
+				};
+				// Show clock confirmation to user
+				const msg = `✓ ${data.clock.message}\n\nEmployee: ${data.employee.name}\nAction: ${data.clock.action.toUpperCase()}\nTime: ${new Date(data.clock.timestamp).toLocaleTimeString()}`;
+				alert(msg);
+				console.log(`Clock update: ${data.clock.message}`);
 			}
-		};
+			// Handle recognition failures
+			else if (data.type === 'recognition_failed') {
+				faceDetected = false;
+				detectionResults = {
+					type: 'recognition_failed',
+					message: data.message,
+					similarity: data.similarity,
+					threshold: data.threshold,
+					success: false
+				};
+				console.warn('Face not recognized:', data.message);
+			}
+			// Handle errors
+			else if (data.type === 'error') {
+				faceDetected = false;
+				detectionResults = {
+					type: 'error',
+					message: data.message,
+					success: false
+				};
+				console.warn('Error from server:', data.message);
+			}
+			// Handle command responses
+			else if (data.type === 'command_response') {
+				if (data.action === 'clear') {
+					alert('✓ Database and clock status cleared');
+				}
+			}
+			// Handle status updates
+			else if (data.type === 'status_update') {
+				console.log('Clock status update:', data.clock_status);
+				detectionResults = {
+					type: 'status',
+					clock_status: data.clock_status
+				};
+			}
+			// Handle employees list
+			else if (data.type === 'employees_list') {
+				console.log(`${data.count} employees registered:`, data.employees);
+				detectionResults = {
+					type: 'employees',
+					employees: data.employees,
+					count: data.count
+				};
 
 		ws.onerror = (error) => {
 			console.error('WebSocket error:', error);
@@ -124,18 +165,18 @@
 	}
 
 	function toggleRegister() {
-		registerMode = !registerMode;
-		if (registerMode) {
-			// Send register command
-			ws.send(JSON.stringify({ action: 'register' }));
-			console.log('Registration mode activated');
-		}
+		// Changed to display status instead (legacy)
+		ws.send(JSON.stringify({ action: 'get_status' }));
 	}
 
 	function clearDatabase() {
-		if (confirm('Are you sure you want to clear the database?')) {
+		if (confirm('Are you sure you want to clear the database and clock data?')) {
 			ws.send(JSON.stringify({ action: 'clear' }));
 		}
+	}
+
+	function displayAllEmployees() {
+		ws.send(JSON.stringify({ action: 'get_employees' }));
 	}
 
 	function sendSingleFrame() {
@@ -149,7 +190,7 @@
 </script>
 
 <div class="container">
-	<h1>Facial Recognition System</h1>
+	<h1>Employee Clock-In System</h1>
 
 	<div class="status">
 		<p>
@@ -168,26 +209,69 @@
 	</div>
 
 	<div class="controls">
-		<button on:click={toggleRegister} class={registerMode ? 'active' : ''}>
-			{registerMode ? 'Cancel Register' : 'Register Face'}
-		</button>
-		<button on:click={sendSingleFrame}>Send Frame</button>
-		<button on:click={clearDatabase} class="danger">Clear Database</button>
+		<button on:click={displayAllEmployees}>Show Employees</button>
+		<button on:click={toggleRegister}>Show Status</button>
+		<button on:click={sendSingleFrame}>Manual Verify</button>
+		<button on:click={clearDatabase} class="danger">Clear System</button>
 	</div>
 
 	{#if detectionResults}
 		<div class="results">
-			<h3>Detection Results</h3>
-			<p>Faces detected: {detectionResults.face_count}</p>
-			{#if detectionResults.faces && detectionResults.faces.length > 0}
-				{#each detectionResults.faces as face, i}
-					<div class="face-result">
-						<p><strong>Face {i + 1}</strong></p>
-						<p>Match: {face.matched_name || 'Unknown'}</p>
-						<p>Similarity: {(face.similarity * 100).toFixed(2)}%</p>
-						<p>Authorized: {face.authorized ? '✓ Yes' : '✗ No'}</p>
+			{#if detectionResults.type === 'clock_verification'}
+				<div class="clock-success">
+					<h3>✓ Clock Verification Successful</h3>
+					<div class="employee-info">
+						<p><strong>Employee:</strong> {detectionResults.employee.name}</p>
+						<p><strong>Action:</strong> {detectionResults.clock.action === 'clock_in' ? '🟢 CLOCKED IN' : '🔴 CLOCKED OUT'}</p>
+						<p><strong>Time:</strong> {new Date(detectionResults.clock.timestamp).toLocaleString()}</p>
+						<p><strong>Message:</strong> {detectionResults.clock.message}</p>
+						<p><strong>Similarity:</strong> {(detectionResults.similarity * 100).toFixed(2)}%</p>
 					</div>
-				{/each}
+				</div>
+			{:else if detectionResults.type === 'recognition_failed'}
+				<div class="recognition-failed">
+					<h3>✗ Face Not Recognized</h3>
+					<p>{detectionResults.message}</p>
+					<p>Similarity: {(detectionResults.similarity * 100).toFixed(2)}% (threshold: {(detectionResults.threshold * 100).toFixed(2)}%)</p>
+				</div>
+			{:else if detectionResults.type === 'error'}
+				<div class="error">
+					<h3>Error</h3>
+					<p>{detectionResults.message}</p>
+				</div>
+			{:else if detectionResults.type === 'status'}
+				<div class="status-display">
+					<h3>Clock Status</h3>
+					{#if Object.keys(detectionResults.clock_status).length === 0}
+						<p>No employees clocked in/out yet.</p>
+					{:else}
+						{#each Object.entries(detectionResults.clock_status) as [name, status]}
+							<div class="status-item">
+								<p><strong>{name}</strong></p>
+								<p>Status: {status.clocked_in ? '🟢 CLOCKED IN' : '🔴 CLOCKED OUT'}</p>
+								{#if status.clock_in_time}
+									<p>Clock In: {new Date(status.clock_in_time).toLocaleString()}</p>
+								{/if}
+								{#if status.clock_out_time}
+									<p>Clock Out: {new Date(status.clock_out_time).toLocaleString()}</p>
+								{/if}
+							</div>
+						{/each}
+					{/if}
+				</div>
+			{:else if detectionResults.type === 'employees'}
+				<div class="employees-list">
+					<h3>Registered Employees ({detectionResults.count})</h3>
+					{#if detectionResults.count === 0}
+						<p>No employees registered yet.</p>
+					{:else}
+						<ul>
+							{#each detectionResults.employees as employee}
+								<li>{employee}</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
 			{/if}
 		</div>
 	{/if}
@@ -195,36 +279,45 @@
 
 <style>
 	.container {
-		max-width: 800px;
+		max-width: 900px;
 		margin: 0 auto;
 		padding: 20px;
-		font-family: Arial, sans-serif;
+		font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+		min-height: 100vh;
 	}
 
 	h1 {
 		text-align: center;
-		color: #333;
+		color: white;
+		margin-bottom: 30px;
+		font-size: 2em;
+		text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 	}
 
 	.status {
-		background: #f0f0f0;
+		background: rgba(255, 255, 255, 0.95);
 		padding: 15px;
-		border-radius: 5px;
+		border-radius: 8px;
 		margin-bottom: 20px;
+		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 	}
 
 	.status p {
 		margin: 5px 0;
+		color: #333;
 	}
 
 	.connected {
-		color: green;
+		color: #28a745;
 		font-weight: bold;
+		font-size: 1.1em;
 	}
 
 	.disconnected {
-		color: red;
+		color: #dc3545;
 		font-weight: bold;
+		font-size: 1.1em;
 	}
 
 	.video-container {
@@ -232,13 +325,16 @@
 		width: 100%;
 		margin-bottom: 20px;
 		background: #000;
-		border-radius: 5px;
+		border-radius: 8px;
 		overflow: hidden;
+		box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+		aspect-ratio: 4 / 3;
 	}
 
 	video {
 		width: 100%;
-		height: auto;
+		height: 100%;
+		object-fit: cover;
 		display: block;
 	}
 
@@ -246,41 +342,50 @@
 		position: absolute;
 		top: 10px;
 		right: 10px;
-		background: rgba(0, 255, 0, 0.8);
+		background: rgba(40, 167, 69, 0.95);
 		color: white;
 		padding: 10px 15px;
 		border-radius: 5px;
 		font-weight: bold;
+		animation: pulse 1.5s infinite;
+	}
+
+	@keyframes pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.7; }
 	}
 
 	.controls {
 		display: flex;
 		gap: 10px;
 		margin-bottom: 20px;
+		flex-wrap: wrap;
 	}
 
 	button {
 		flex: 1;
+		min-width: 150px;
 		padding: 12px;
 		font-size: 16px;
 		border: none;
-		border-radius: 5px;
+		border-radius: 8px;
 		cursor: pointer;
-		background: #007bff;
-		color: white;
-		transition: background 0.3s;
+		background: rgba(255, 255, 255, 0.95);
+		color: #667eea;
+		font-weight: bold;
+		transition: all 0.3s ease;
+		box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 	}
 
 	button:hover {
-		background: #0056b3;
-	}
-
-	button.active {
-		background: #ff6b6b;
+		background: white;
+		transform: translateY(-2px);
+		box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
 	}
 
 	button.danger {
 		background: #dc3545;
+		color: white;
 	}
 
 	button.danger:hover {
@@ -288,25 +393,129 @@
 	}
 
 	.results {
-		background: #f9f9f9;
-		padding: 15px;
-		border-radius: 5px;
-		border-left: 4px solid #007bff;
+		background: rgba(255, 255, 255, 0.95);
+		padding: 20px;
+		border-radius: 8px;
+		box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+		animation: slideIn 0.3s ease;
 	}
 
-	.results h3 {
+	@keyframes slideIn {
+		from {
+			opacity: 0;
+			transform: translateY(10px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	.clock-success {
+		background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+		border-left: 6px solid #28a745;
+		padding: 15px;
+		border-radius: 5px;
+	}
+
+	.clock-success h3 {
+		color: #155724;
+		margin-top: 0;
+		font-size: 1.3em;
+	}
+
+	.employee-info {
+		background: white;
+		padding: 15px;
+		border-radius: 5px;
+		margin-top: 10px;
+	}
+
+	.employee-info p {
+		margin: 8px 0;
+		color: #333;
+	}
+
+	.recognition-failed {
+		background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+		border-left: 6px solid #dc3545;
+		padding: 15px;
+		border-radius: 5px;
+	}
+
+	.recognition-failed h3 {
+		color: #721c24;
+		margin-top: 0;
+		font-size: 1.3em;
+	}
+
+	.recognition-failed p {
+		color: #721c24;
+	}
+
+	.error {
+		background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+		border-left: 6px solid #dc3545;
+		padding: 15px;
+		border-radius: 5px;
+	}
+
+	.error h3 {
+		color: #721c24;
 		margin-top: 0;
 	}
 
-	.face-result {
+	.error p {
+		color: #721c24;
+	}
+
+	.status-display {
+		background: #f9f9f9;
+		padding: 15px;
+		border-radius: 5px;
+	}
+
+	.status-display h3 {
+		margin-top: 0;
+		color: #333;
+	}
+
+	.status-item {
 		background: white;
 		padding: 10px;
 		margin: 10px 0;
-		border-radius: 3px;
-		border: 1px solid #ddd;
+		border-radius: 5px;
+		border: 2px solid #667eea;
 	}
 
-	.face-result p {
+	.status-item p {
 		margin: 5px 0;
+		color: #333;
+	}
+
+	.employees-list {
+		background: #f9f9f9;
+		padding: 15px;
+		border-radius: 5px;
+	}
+
+	.employees-list h3 {
+		margin-top: 0;
+		color: #333;
+	}
+
+	.employees-list ul {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+	}
+
+	.employees-list li {
+		background: white;
+		padding: 10px;
+		margin: 8px 0;
+		border-radius: 5px;
+		border-left: 4px solid #667eea;
+		color: #333;
 	}
 </style>

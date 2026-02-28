@@ -6,23 +6,44 @@ import json
 import base64
 import numpy as np
 import cv2
+from datetime import datetime
 
 # Import facial recognition system
-from facialRecognition.localFaceRec.secureFacialID import (
-    init_db, load_users, save_user, compute_similarity, 
-    face_app, authorized_users, last_known_authorized_centers, conn,
-    match_face, delete_user, get_all_users, SIMILARITY_THRESHOLD,
-    FACE_MODEL, GPU_ENABLED
-)
+try:
+    from facialRecognition.localFaceRec.secureFacialID import FacialSecuritySystem
+    security_system = FacialSecuritySystem()
+    face_app = security_system.face_app
+    authorized_users = security_system.authorized_users
+    conn = security_system.conn
+    print("✓ FacialSecuritySystem initialized successfully")
+except FileNotFoundError as e:
+    print(f"⚠ Secrets file not found: {e}")
+    print("Running in DEGRADED MODE - facial recognition unavailable")
+    face_app = None
+    authorized_users = {}
+    conn = None
+except Exception as e:
+    print(f"ERROR initializing FacialSecuritySystem: {e}")
+    print("Running in DEGRADED MODE - facial recognition unavailable")
+    face_app = None
+    authorized_users = {}
+    conn = None
+
+# Default constants for face matching
+SIMILARITY_THRESHOLD = 0.40  # 40% similarity threshold for face matching
 
 app = FastAPI()
+
+# --- In-memory clock status tracking ---
+employee_clock_status = {}  # {employee_name: {"clocked_in": bool, "clock_in_time": datetime, "clock_out_time": datetime}}
 
 # --- Accepted Origins for CORS ---
 origins = [
     "http://cgswswk88cg04k4www8g8cgs.76.13.29.239.sslip.io",
     "http://localhost:5173",  # Svelte dev server
     "http://localhost:3000",
-    "http://localhost:8000"
+    "http://localhost:8000",
+    "http://localhost:8001"
 ]
 # --- CORS Middleware Setup ---
 app.add_middleware(
@@ -33,125 +54,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- HEALTH CHECK ENDPOINT ---
+# --- UTILITY FUNCTIONS FOR SIMILARITY MATCHING ---
+def compute_similarity(emb1, emb2):
+    """Compute cosine similarity between two embeddings"""
+    try:
+        emb1 = np.array(emb1).flatten()
+        emb2 = np.array(emb2).flatten()
+        
+        # Cosine similarity
+        dot_product = np.dot(emb1, emb2)
+        norm1 = np.linalg.norm(emb1)
+        norm2 = np.linalg.norm(emb2)
+        
+        if norm1 == 0 or norm2 == 0:
+            return 0.0
+        
+        similarity = dot_product / (norm1 * norm2)
+        return similarity
+    except Exception as e:
+        print(f"Error computing similarity: {e}")
+        return 0.0
+
+# --- HEALTH CHECK ENDPOINTS ---
 @app.get("/")
 async def root():
-    return {"status": "ok", "message": "Facial Recognition API is running"}
+    return {"status": "ok", "message": "Facial Recognition Clock-In System Running"}
 
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
-
-# --- SYSTEM STATUS ENDPOINTS ---
-@app.get("/api/system/status")
-async def system_status():
-    """Get system configuration and status"""
-    return {
-        "status": "ok",
-        "database_connected": conn is not None,
-        "face_model_loaded": face_app is not None,
-        "model_name": FACE_MODEL,
-        "gpu_enabled": GPU_ENABLED,
-        "similarity_threshold": SIMILARITY_THRESHOLD,
-        "registered_users_count": len(authorized_users)
-    }
-
-@app.get("/api/system/stats")
-async def system_stats():
-    """Get system statistics"""
-    try:
-        all_users = get_all_users() if conn else {}
-        return {
-            "status": "ok",
-            "total_registered_users": len(authorized_users),
-            "users_in_memory": list(authorized_users.keys()),
-            "users_in_database": list(all_users.keys()) if all_users else [],
-            "threshold": SIMILARITY_THRESHOLD
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e),
-            "total_registered_users": len(authorized_users),
-            "users_in_memory": list(authorized_users.keys())
-        }
-
-# --- USER MANAGEMENT ENDPOINTS ---
-@app.get("/api/users")
-async def get_users():
-    """Get all registered users"""
-    try:
-        all_users = get_all_users() if conn else {}
-        return {
-            "status": "ok",
-            "count": len(authorized_users),
-            "users": all_users if all_users else {name: {} for name in authorized_users.keys()}
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e),
-            "users": {name: {} for name in authorized_users.keys()}
-        }
-
-@app.get("/api/users/{user_name}")
-async def get_user(user_name: str):
-    """Get specific user information"""
-    if user_name in authorized_users:
-        return {
-            "status": "ok",
-            "name": user_name,
-            "registered": True,
-            "embedding_shape": [512],
-            "threshold": SIMILARITY_THRESHOLD
-        }
-    return {
-        "status": "not_found",
-        "message": f"User {user_name} not registered"
-    }
-
-@app.delete("/api/users/{user_name}")
-async def remove_user(user_name: str):
-    """Delete a registered user"""
-    if user_name not in authorized_users:
-        return {
-            "status": "error",
-            "message": f"User {user_name} not found"
-        }
-    
-    success = delete_user(user_name)
-    return {
-        "status": "ok" if success else "error",
-        "message": f"User {user_name} deleted successfully" if success else f"Failed to delete {user_name}",
-        "remaining_users": len(authorized_users)
-    }
-
-# --- FACE MATCHING ENDPOINT ---
-@app.post("/api/match")
-async def match_face_endpoint(embedding: dict):
-    """Match a face embedding against registered users"""
-    try:
-        if "embedding" not in embedding:
-            return {
-                "status": "error",
-                "message": "No embedding provided"
-            }
-        
-        emb_array = np.array(embedding["embedding"], dtype=np.float32)
-        matched_name, similarity = match_face(emb_array, SIMILARITY_THRESHOLD)
-        
-        return {
-            "status": "ok",
-            "matched_name": matched_name,
-            "similarity": float(similarity),
-            "threshold": SIMILARITY_THRESHOLD,
-            "authorized": matched_name is not None
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
 
 # --- UTILITY FUNCTIONS ---
 def decode_base64_image(base64_string):
@@ -168,72 +99,255 @@ def decode_base64_image(base64_string):
         print(f"Error decoding image: {e}")
         return None
 
-def process_face_frame(frame, register_mode=False):
-    """Process frame and return facial recognition results"""
+def get_face_embedding(frame):
+    """Extract face embedding from frame"""
     try:
-        faces = face_app.get(frame)
-        results = []
+        if face_app is None:
+            return None
         
-        for face in faces:
-            face_bbox = face.bbox.astype(int)
-            embedding = face.normed_embedding
-            
-            best_match_name = None
-            best_sim = 0.0
-            
-            # Compare against authorized users
-            for name, auth_emb in authorized_users.items():
-                sim = compute_similarity(auth_emb, embedding)
-                if sim > 0.40 and sim > best_sim:
-                    best_sim = sim
-                    best_match_name = name
-            
-            result = {
-                "bbox": face_bbox.tolist(),
-                "embedding": embedding.tolist(),
-                "matched_name": best_match_name,
-                "similarity": float(best_sim) if best_match_name else 0.0,
-                "authorized": best_match_name is not None
+        faces = face_app.get(frame)
+        if len(faces) == 0:
+            return None
+        
+        # Return embedding of the most prominent face
+        embedding = faces[0].normed_embedding
+        return embedding
+    except Exception as e:
+        print(f"Error extracting face embedding: {e}")
+        return None
+
+def recognize_employee(embedding):
+    """Recognize employee from embedding"""
+    if not embedding or len(authorized_users) == 0:
+        return None, 0.0, "No registered employees"
+    
+    best_match_name = None
+    best_similarity = 0.0
+    
+    for name, registered_embedding in authorized_users.items():
+        similarity = compute_similarity(registered_embedding, embedding)
+        if similarity > best_similarity:
+            best_similarity = similarity
+            best_match_name = name if similarity >= SIMILARITY_THRESHOLD else None
+    
+    return best_match_name, best_similarity, "Match found" if best_match_name else "No match above threshold"
+
+def get_employee_info(employee_name):
+    """Get employee information"""
+    try:
+        if employee_name in authorized_users:
+            return {
+                "name": employee_name,
+                "registered": True,
+                "status": "Active"
             }
-            results.append(result)
+        return None
+    except Exception as e:
+        print(f"Error getting employee info: {e}")
+        return None
+
+def toggle_clock_status(employee_name):
+    """Toggle clock in/out status for employee"""
+    current_time = datetime.now()
+    
+    if employee_name not in employee_clock_status:
+        employee_clock_status[employee_name] = {
+            "clocked_in": False,
+            "clock_in_time": None,
+            "clock_out_time": None
+        }
+    
+    status = employee_clock_status[employee_name]
+    
+    if status["clocked_in"]:
+        # Clock out
+        status["clocked_in"] = False
+        status["clock_out_time"] = current_time.isoformat()
+        action = "clock_out"
+        message = f"{employee_name} clocked OUT"
+    else:
+        # Clock in
+        status["clocked_in"] = True
+        status["clock_in_time"] = current_time.isoformat()
+        status["clock_out_time"] = None
+        action = "clock_in"
+        message = f"{employee_name} clocked IN"
+    
+    return {
+        "action": action,
+        "message": message,
+        "clocked_in": status["clocked_in"],
+        "timestamp": current_time.isoformat(),
+        "status_data": status
+    }
+
+# --- HTTP ENDPOINTS ---
+
+@app.get("/api/employees")
+async def get_employees():
+    """Get all registered employees"""
+    try:
+        employees = []
+        
+        for name in authorized_users.keys():
+            emp_info = get_employee_info(name)
+            clock_status = employee_clock_status.get(name, {
+                "clocked_in": False,
+                "clock_in_time": None,
+                "clock_out_time": None
+            })
+            
+            employees.append({
+                "name": name,
+                "registered": True,
+                "clocked_in": clock_status.get("clocked_in", False),
+                "clock_in_time": clock_status.get("clock_in_time"),
+                "clock_out_time": clock_status.get("clock_out_time"),
+                "info": emp_info
+            })
         
         return {
-            "status": "success",
-            "face_count": len(faces),
-            "faces": results
+            "status": "ok",
+            "total_employees": len(employees),
+            "employees": employees
         }
     except Exception as e:
         return {
             "status": "error",
-            "message": str(e)
+            "message": str(e),
+            "employees": []
         }
 
-# --- INCOMING DATA STREAM ---
+@app.get("/api/employees/{employee_name}/status")
+async def get_employee_status(employee_name: str):
+    """Get specific employee clock status"""
+    if employee_name not in authorized_users:
+        return {
+            "status": "not_found",
+            "message": f"Employee {employee_name} not registered"
+        }
+    
+    clock_status = employee_clock_status.get(employee_name, {
+        "clocked_in": False,
+        "clock_in_time": None,
+        "clock_out_time": None
+    })
+    
+    emp_info = get_employee_info(employee_name)
+    
+    return {
+        "status": "ok",
+        "name": employee_name,
+        "clocked_in": clock_status.get("clocked_in", False),
+        "clock_in_time": clock_status.get("clock_in_time"),
+        "clock_out_time": clock_status.get("clock_out_time"),
+        "info": emp_info
+    }
+
+# --- FACIAL RECOGNITION ENDPOINT ---
+
+@app.post("/api/verify-face")
+async def verify_face(data: dict):
+    """Verify face and clock in/out employee"""
+    try:
+        if "image_base64" not in data:
+            return {
+                "status": "error",
+                "message": "No image provided",
+                "success": False
+            }
+        
+        # Decode image
+        frame = decode_base64_image(data["image_base64"])
+        if frame is None:
+            return {
+                "status": "error",
+                "message": "Failed to decode image",
+                "success": False
+            }
+        
+        # Extract face embedding
+        embedding = get_face_embedding(frame)
+        if embedding is None:
+            return {
+                "status": "error",
+                "message": "No face detected in image",
+                "success": False,
+                "face_count": 0
+            }
+        
+        # Recognize employee
+        employee_name, similarity, recognition_msg = recognize_employee(embedding)
+        
+        if not employee_name:
+            return {
+                "status": "unauthorized",
+                "message": "Face not recognized. Not an authorized employee.",
+                "success": False,
+                "similarity": float(similarity),
+                "threshold": SIMILARITY_THRESHOLD
+            }
+        
+        # Toggle clock status
+        clock_result = toggle_clock_status(employee_name)
+        emp_info = get_employee_info(employee_name)
+        
+        return {
+            "status": "ok",
+            "success": True,
+            "employee": {
+                "name": employee_name,
+                "info": emp_info
+            },
+            "clock": {
+                "action": clock_result["action"],
+                "message": clock_result["message"],
+                "clocked_in": clock_result["clocked_in"],
+                "timestamp": clock_result["timestamp"]
+            },
+            "recognition": {
+                "similarity": float(similarity),
+                "threshold": SIMILARITY_THRESHOLD,
+                "message": recognition_msg
+            }
+        }
+    
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "success": False
+        }
+
+# --- WEBSOCKET ENDPOINT ---
+
 @app.websocket("/ws/stream")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("WebSocket connection accepted")
-    
-    register_next_face = False
 
     try:
         while True:
             data = await websocket.receive_text()
 
-            # --- HANDLE COMMANDS FROM SVELTE ---
-            if data.startswith("{"): 
+            # --- HANDLE COMMANDS ---
+            if data.startswith("{"):
                 try:
                     command_data = json.loads(data)
                     
-                    if command_data.get("action") == "register":
-                        register_next_face = True
+                    if command_data.get("action") == "get_employees":
                         await websocket.send_json({
-                            "type": "command_response",
-                            "action": "register",
-                            "message": "Registration armed for next frame."
+                            "type": "employees_list",
+                            "employees": list(authorized_users.keys()),
+                            "count": len(authorized_users)
                         })
-                        print("Registration armed for next frame.")
-                        
+                    
+                    elif command_data.get("action") == "get_status":
+                        await websocket.send_json({
+                            "type": "status_update",
+                            "clock_status": employee_clock_status
+                        })
+                    
                     elif command_data.get("action") == "clear":
                         if conn:
                             try:
@@ -243,20 +357,20 @@ async def websocket_endpoint(websocket: WebSocket):
                             except Exception as e:
                                 print(f"Error clearing database: {e}")
                         authorized_users.clear()
-                        last_known_authorized_centers.clear()
+                        employee_clock_status.clear()
                         await websocket.send_json({
                             "type": "command_response",
                             "action": "clear",
-                            "message": "Database CLEARED."
+                            "message": "Database and clock status CLEARED."
                         })
                         print("Database CLEARED.")
-                        
+                
                 except json.JSONDecodeError:
                     pass
                 continue
 
             # --- PROCESS IMAGE DATA ---
-            print("Processing image from WebSocket")
+            print("Processing face verification from WebSocket")
             
             # Decode base64 image
             frame = decode_base64_image(data)
@@ -267,34 +381,45 @@ async def websocket_endpoint(websocket: WebSocket):
                 })
                 continue
             
-            # Process faces in frame
-            result = process_face_frame(frame, register_mode=register_next_face)
+            # Extract embedding
+            embedding = get_face_embedding(frame)
+            if embedding is None:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "No face detected in frame",
+                    "success": False
+                })
+                continue
             
-            # Handle registration if armed
-            if register_next_face and result["face_count"] == 1:
-                face_data = result["faces"][0]
-                name = f"User_{len(authorized_users) + 1}"
-                embedding = np.array(face_data["embedding"])
-                
-                if save_user(name, embedding):
-                    authorized_users[name] = embedding
-                    await websocket.send_json({
-                        "type": "registration_success",
-                        "name": name,
-                        "message": f"Successfully registered {name}"
-                    })
-                    print(f"Registered {name}")
-                else:
-                    await websocket.send_json({
-                        "type": "registration_error",
-                        "message": "Failed to save user"
-                    })
-                
-                register_next_face = False
-            else:
-                # Send facial recognition results back to Svelte
-                result["type"] = "face_detection"
-                await websocket.send_json(result)
+            # Recognize employee
+            employee_name, similarity, msg = recognize_employee(embedding)
+            
+            if not employee_name:
+                await websocket.send_json({
+                    "type": "recognition_failed",
+                    "message": "Face not recognized",
+                    "success": False,
+                    "similarity": float(similarity),
+                    "threshold": SIMILARITY_THRESHOLD
+                })
+                continue
+            
+            # Clock in/out
+            clock_result = toggle_clock_status(employee_name)
+            emp_info = get_employee_info(employee_name)
+            
+            await websocket.send_json({
+                "type": "clock_success",
+                "success": True,
+                "employee": {
+                    "name": employee_name,
+                    "info": emp_info
+                },
+                "clock": clock_result,
+                "similarity": float(similarity)
+            })
+            
+            print(f"✓ {clock_result['message']}")
                 
     except WebSocketDisconnect:
         print("WebSocket connection closed")

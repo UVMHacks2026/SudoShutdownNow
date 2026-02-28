@@ -33,7 +33,6 @@ except Exception as e:
     if DEBUG_PRINTS: print("Gemini Disabled!")
 
 
-employees = {}
 
 """
 Formats the headers of an employee data csv file
@@ -50,10 +49,8 @@ def formatReadEmployeeData(fileName):
         with open(fileName, newline="") as csvFile:
             reader = csv.DictReader(csvFile)
 
-            
-            if "id" in reader.fieldnames and "firstName" in reader.fieldnames and "lastNames" in reader.fieldnames and False:
-                pass
-            else:
+            # Checks if the fields are formatted correctly            
+            if not ("id" in reader.fieldnames and "firstName" in reader.fieldnames and "lastNames" in reader.fieldnames):
                 attempts = 4
                 response = ""
                 while attempts:
@@ -63,11 +60,17 @@ def formatReadEmployeeData(fileName):
                                     You are helping to rename the headers of a csv file in python.
                                     Rename different versions of these field to firstName, lastName, id.
                                     Keep fields in their original order.
-                                    An example is ['otherfield', 'firstName', 'lastName', 'id'].
+                                    An example is ['imageID', 'otherfield', 'firstName', 'lastName', 'id'].
+                                    If there are clear first name and last name fields, Your response should be: firstName, lastName, id, otherField, imageId|noSplit.
+                                    If the data only has one name field (first name and last name) combined, rename the field to firstName and add a field to the right called lastName,
+                                    Your response should be: firstName, lastName, id, otherField, imageId|Split.
+
+                                    Do not include any explanation, only the names in the correct order.
                                     The input header is:
                                 """
                         if DEBUG_PRINTS: print("Before response")
                         response = client.models.generate_content(contents= prompt + str(reader.fieldnames), model=MODEL_ID)
+                        attempts = 0
                     except errors.ClientError as e:
                         if DEBUG_PRINTS: print(f"Gemini error code: {e}")
                         if e.code == 429 and attempts:
@@ -107,10 +110,11 @@ def formatReadEmployeeData(fileName):
                             print(f"Gemini Disabled!")
 
                 
-                
                 if geminiWorks and response:  
-                    if DEBUG_PRINTS: print("Reponse:")   
-                    print(response)
+                    if DEBUG_PRINTS: print(response.text.strip())
+                    reader.fieldnames = [name.strip() for name in response.text.strip().split("|")[0].split(",")]
+            return loadEmployees(reader)
+
                     
 
     except FileNotFoundError:
@@ -122,22 +126,28 @@ def readEmployeeData(fileName):
     try:
         with open(fileName, newline="") as csvFile:
             reader = csv.DictReader(csvFile)
-            loadEmployees(reader)
+            return loadEmployees(reader)
     except FileNotFoundError:
         print(f"Could not load the file: {fileName}")
     except Exception as e:
         print(f"An unexpected error has occured!: {e}")
 
-def loadEmployees(reader):
-        for row in reader:
-            if row["id"] in employees:
-                if DEBUG_PRINTS: print(f"Duplicate ID!: {row["id"]}")
+def loadEmployees(reader, splitName=False):
+    employees = {}
+
+    for row in reader:
+        if row["id"] in employees:
+            if DEBUG_PRINTS: print(f"Duplicate ID!: {row["id"]}")
+        else:
+            if row["id"]:
+                employees[row["id"]] = Employee.Employee(row["firstName"], row["lastName"], row["id"], row["imageId"])
             else:
-                if row["id"]:
-                    employees[row["id"]] = Employee.Employee(row["firstName"], row["lastName"], row["id"])
-                else:
-                    if DEBUG_PRINTS: print("Missing ID!")
-
-
+                if DEBUG_PRINTS: print("Missing ID!")
+    return employees
+        
 if __name__ == "__main__":
-    formatReadEmployeeData("EmployeeData.csv")
+    employees = formatReadEmployeeData("EmployeeDataTest.csv")
+
+    if employees:
+        for employee in employees:
+            print(employees[employee])

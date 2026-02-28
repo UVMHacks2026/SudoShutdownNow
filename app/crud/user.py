@@ -20,7 +20,12 @@ def get_all_users(db: Session) -> list[User]:
 
 def create_user(db: Session, user: UserCreate) -> User:
     """Create a new user."""
-    db_user = User(id=user.id, email=user.email)
+    db_user = User(
+        id=user.id,
+        email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name
+    )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.api.deps import get_db, verify_auth
-from app.models import User
+from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -29,7 +29,12 @@ def create_user(
             detail="User with this email already exists"
         )
 
-    db_user = User(id=user.id, email=user.email)
+    db_user = User(
+        id=user.id,
+        email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name
+    )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -66,6 +71,33 @@ def get_user_by_id(
             detail="User not found"
         )
     return user
+
+
+@router.get("/{user_id}/exists")
+def user_exists(
+    user_id: str,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_auth)
+):
+    """Return whether a user exists by ID."""
+    exists = db.query(User).filter(User.id == user_id).first() is not None
+    return {"exists": exists}
+
+
+@router.post("/{user_id}/loggedin")
+def user_logged_in(
+    user_id: str,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_auth)
+):
+    """Compatibility endpoint used by frontend login flow."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return {"ok": True}
 
 
 @router.get("", response_model=list[UserResponse])

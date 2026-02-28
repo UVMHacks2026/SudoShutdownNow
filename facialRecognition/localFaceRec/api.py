@@ -9,11 +9,19 @@ Endpoints:
 Run with:
   uvicorn api:app --host 0.0.0.0 --port 8000
 """
+import os
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
-from secureFacialID import FacialSecuritySystem
+try:
+    from .secureFacialID import FacialSecuritySystem
+except ImportError:
+    from secureFacialID import FacialSecuritySystem
+
+# Load environment variables from .env file
+load_dotenv()
 
 # --- Shared system instance ---
 system: FacialSecuritySystem = None
@@ -21,8 +29,15 @@ system: FacialSecuritySystem = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global system
-    print("Initializing FacialSecuritySystem...")
-    system = FacialSecuritySystem()
+    print("Initializing FacialSecuritySystem (Standalone Mode)...")
+    
+    database_url = os.getenv("DATABASE_URL")
+    fernet_key = os.getenv("FERNET_KEY")
+    
+    system = FacialSecuritySystem(
+        database_url=database_url,
+        fernet_key=fernet_key
+    )
     print("Ready.")
     yield
     if system and system.conn:

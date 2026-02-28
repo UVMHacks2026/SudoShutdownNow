@@ -15,7 +15,17 @@ def get_db() -> Generator[Session, None, None]:
 
 def verify_auth(Authorization: str = Header(...)) -> None:
     settings = get_settings()
-    if Authorization != settings.MASTER_KEY:
+    if not settings.MASTER_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="MASTER_KEY is not configured"
+        )
+
+    token = Authorization.strip()
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
+
+    if token != settings.MASTER_KEY:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid API key"

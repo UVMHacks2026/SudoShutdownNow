@@ -4,14 +4,21 @@ import pickle
 import base64
 
 from app.api.deps import get_db, verify_auth
-from app.models import User
+from app.models.user import User
 from app.schemas.user import EmployeeCreate, EmployeeResponse, FrameRequest
 from facialRecognition.localFaceRec.secureFacialID import FacialSecuritySystem
+from app.core.config import get_settings
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 
 # Helper to get the shared system instance from app state
 def get_security_system(request: Request) -> FacialSecuritySystem:
+    if getattr(request.app.state, "facial_system", None) is None:
+        settings = get_settings()
+        request.app.state.facial_system = FacialSecuritySystem(
+            database_url=settings.DATABASE_URL,
+            fernet_key=settings.FERNET_KEY
+        )
     return request.app.state.facial_system
 
 @router.post("", response_model=EmployeeResponse, status_code=status.HTTP_201_CREATED)

@@ -7,11 +7,15 @@ class FrameRequest(BaseModel):
 class UserCreate(BaseModel):
     id: str
     email: EmailStr
+    first_name: str | None = None
+    last_name: str | None = None
 
 
 class UserResponse(BaseModel):
     id: str
     email: str
+    first_name: str | None = None
+    last_name: str | None = None
 
     class Config:
         from_attributes = True

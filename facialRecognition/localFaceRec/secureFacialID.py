@@ -9,23 +9,27 @@ import base64
 from cryptography.fernet import Fernet
 
 class FacialSecuritySystem:
-    def __init__(self):
+    def __init__(self, database_url: str = None, fernet_key: str = None):
+        self.face_table = "facial_embeddings"
         # --- 1. CONFIGURATION & SECRETS ---
-        # Check env var first (for deployed/Docker environments), fall back to secrets.json
-        fernet_key = os.environ.get("FERNET_KEY")
-        if not fernet_key:
+        # Prioritize arguments, then env vars, then secrets.json
+        self.fernet_key = fernet_key or os.environ.get("FERNET_KEY")
+        if not self.fernet_key:
             secrets_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'gemeniFacialAnalysis', 'secrets.json')
             try:
                 with open(secrets_path, 'r') as f:
                     secrets = json.load(f)
-                fernet_key = secrets.get("FERNET_KEY")
+                self.fernet_key = secrets.get("FERNET_KEY")
             except Exception:
                 pass
-        if not fernet_key:
-            raise RuntimeError("CRITICAL ERROR: FERNET_KEY not found. Set the FERNET_KEY environment variable or create secrets.json.")
-        self.cipher_suite = Fernet(fernet_key.encode('utf-8'))
+        
+        if not self.fernet_key:
+            raise RuntimeError("CRITICAL ERROR: FERNET_KEY not found. Set the FERNET_KEY environment variable, pass it to the constructor, or create secrets.json.")
+        
+        self.cipher_suite = Fernet(self.fernet_key.encode('utf-8'))
 
         # --- 2. DATABASE SETUP ---
+        self.database_url = database_url or os.environ.get("DATABASE_URL")
         self.conn = self._init_db()
         self.authorized_users = self._load_users()
         print(f"[SecuritySystem] Loaded {len(self.authorized_users)} authorized users from database.")
@@ -36,28 +40,31 @@ class FacialSecuritySystem:
         self.face_app.prepare(ctx_id=0, det_size=(640, 640))
         
     def _init_db(self):
-        database_url = os.environ.get("DATABASE_URL")
-        if not database_url:
-            raise RuntimeError("CRITICAL ERROR: DATABASE_URL environment variable not set.")
+        if not self.database_url:
+            print("Warning: DATABASE_URL not set. Facial embeddings DB disabled.")
+            return None
         
         try:
-            conn = psycopg2.connect(database_url)
-            # Create table if not exists (minimal check)
+            conn = psycopg2.connect(self.database_url)
+            # Use a dedicated table so this data does not collide with app.users.
             c = conn.cursor()
-            c.execute('''CREATE TABLE IF NOT EXISTS users
+            c.execute(f'''CREATE TABLE IF NOT EXISTS {self.face_table}
                          (id SERIAL PRIMARY KEY, name TEXT UNIQUE, embedding BYTEA)''')
             conn.commit()
             return conn
         except Exception as e:
-            raise RuntimeError(f"CRITICAL ERROR connecting to PostgreSQL via DATABASE_URL: {e}")
+            print(f"Warning: could not initialize facial embeddings DB: {e}")
+            return None
 
     def _save_user(self, name, embedding):
+        if self.conn is None:
+            return None
         serialized_embedding = pickle.dumps(embedding)
         encrypted_embedding = self.cipher_suite.encrypt(serialized_embedding)
         try:
             c = self.conn.cursor()
-            c.execute("""
-                INSERT INTO users (name, embedding) 
+            c.execute(f"""
+                INSERT INTO {self.face_table} (name, embedding) 
                 VALUES (%s, %s)
                 RETURNING id
             """, (name, psycopg2.Binary(encrypted_embedding)))
@@ -70,18 +77,43 @@ class FacialSecuritySystem:
             return None
 
     def _load_users(self):
+        if self.conn is None:
+            return {}
         c = self.conn.cursor()
-        c.execute("SELECT name, embedding FROM users")
         users = {}
-        for row in c.fetchall():
-            name = row[0]
-            encrypted_embedding = bytes(row[1]) 
-            try:
-                decrypted_embedding = self.cipher_suite.decrypt(encrypted_embedding)
-                embedding = pickle.loads(decrypted_embedding)
-                users[name] = embedding
-            except Exception as e:
-                print(f"Error decrypting user {name}: {e}")
+
+        # Load facial embeddings from dedicated table.
+        try:
+            c.execute(f"SELECT name, embedding FROM {self.face_table}")
+            for row in c.fetchall():
+                name = row[0]
+                encrypted_embedding = bytes(row[1])
+                try:
+                    decrypted_embedding = self.cipher_suite.decrypt(encrypted_embedding)
+                    embedding = pickle.loads(decrypted_embedding)
+                    users[name] = embedding
+                except Exception as e:
+                    print(f"Error decrypting user {name}: {e}")
+        except Exception as e:
+            print(f"Warning: could not read {self.face_table}: {e}")
+
+        # Backward compatibility: also load encrypted face embeddings stored on app_users rows.
+        try:
+            c.execute("SELECT first_name, last_name, face_embedding FROM app_users WHERE face_embedding IS NOT NULL")
+            for first_name, last_name, encoded_embedding in c.fetchall():
+                if not encoded_embedding:
+                    continue
+                name = f"{first_name or ''} {last_name or ''}".strip() or "Unknown User"
+                try:
+                    encrypted_embedding = base64.b64decode(encoded_embedding)
+                    decrypted_embedding = self.cipher_suite.decrypt(encrypted_embedding)
+                    embedding = pickle.loads(decrypted_embedding)
+                    users[name] = embedding
+                except Exception as e:
+                    print(f"Error loading app_users embedding for {name}: {e}")
+        except Exception as e:
+            print(f"Warning: could not read app_users face embeddings: {e}")
+
         return users
 
     def _compute_similarity(self, embedding1, embedding2):

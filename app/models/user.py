@@ -3,11 +3,14 @@ from app.db import Base
 
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = "app_users"
 
     id = Column(String, primary_key=True, index=True)
     email = Column(String, unique=True, nullable=False, index=True)
-    image_id = Column(String, nullable=True, index=True)
+    first_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
+    image_id = Column(String, nullable=True)
+    face_embedding = Column(String, nullable=True)  # Encrypted base64/pickle payload
 
     def __repr__(self):
-        return f"<User(id={self.id}, email={self.email}, image_id={self.image_id})>"
+        return f"<User(id={self.id}, email={self.email}, name={self.first_name} {self.last_name})>"

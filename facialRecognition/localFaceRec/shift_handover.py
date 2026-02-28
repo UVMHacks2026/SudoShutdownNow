@@ -1,4 +1,3 @@
-import os
 import json
 import psycopg2
 from google import genai
@@ -32,10 +31,6 @@ except Exception as e:
 
 
 def generate_handover_summary(raw_notes: str) -> str:
-    """
-    Uses Gemini to take messy/rushed notes from a clocking-out worker 
-    and turns them into a clean, bulleted checklist for the next worker.
-    """
     if not client:
         return "AI Summary unavailable (API key missing). Raw notes: " + raw_notes
 
@@ -63,10 +58,6 @@ def generate_handover_summary(raw_notes: str) -> str:
 
 
 def save_shift_notes(outgoing_employee_id: str, raw_notes: str, incoming_employee_id: str = None) -> bool:
-    """
-    Saves the notes from the clocking-out employee, generates an AI summary, 
-    and stores it in the database for the next shift.
-    """
     if not DATABASE_URL:
         logger.error("Cannot save notes: DATABASE_URL is missing.")
         return False
@@ -98,11 +89,6 @@ def save_shift_notes(outgoing_employee_id: str, raw_notes: str, incoming_employe
 
 
 def get_pending_handover_notes(incoming_employee_id: str = None) -> list:
-    """
-    Retrieves unread shift notes. 
-    If incoming_employee_id is provided, gets notes specifically for them OR notes left for 'anyone'.
-    If not provided, gets all unread notes.
-    """
     if not DATABASE_URL:
         logger.error("Cannot get notes: DATABASE_URL is missing.")
         return []
@@ -172,7 +158,7 @@ def mark_notes_as_read(note_id: int) -> bool:
         if conn:
             conn.close()
 
-
+# TODO: Update this to fit with rest of the app's structure and error handling conventions
 # --- INTERACTIVE TERMINAL APP ---
 if __name__ == "__main__":
     print("\n" + "="*50)

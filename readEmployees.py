@@ -58,16 +58,16 @@ def formatReadEmployeeData(fileName):
                 response = ""
                 while attempts:
                     try:
-                        # The fields are supposes to look like ['firstName', 'lastName', 'id', 'imageId', email']
+                        # The fields are supposes to look like ['firstName', 'lastName', 'id', 'imageId', 'email', 'shifts']
                         prompt = """
                                     You are helping to rename the headers of a csv file in python.
-                                    Rename different versions of these field to firstName, lastName, id, imageId, email.
+                                    Rename different versions of these field to firstName, lastName, id, imageId, email, shifts.
                                     Keep fields in their original order.
                                     fields are case sensitive in camelCase, that means d in id is lowercase.
-                                    An example is ['imageId', 'otherfield', 'firstName', 'lastName', 'id', email].
-                                    If there are clear first name and last name fields, Your response should be: firstName, lastName, id, otherField, imageId, email|noSplit.
+                                    An example is ['imageId', 'otherfield', 'firstName', 'lastName', 'id', 'email', 'shifts'].
+                                    If there are clear first name and last name fields, Your response should be: firstName, lastName, id, otherField, imageId, email, shifts|noSplit.
                                     If the data only has one name field (first name and last name) combined, rename the field to firstName,
-                                    Your response should be: firstName, id, otherField, imageId, email|Split.
+                                    Your response should be: firstName, id, otherField, imageId, email, shifts|Split.
                                     Do not include any explanation, only the names in the correct order.
                                     The input header is:
                                 """

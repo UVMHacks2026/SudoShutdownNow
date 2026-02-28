@@ -8,6 +8,7 @@ class Employee:
         self.id = id
         self.imageId = imageId
         self.email = email
+        self.shifts = 
 
     def getFirstName(self):
         return self.firstName

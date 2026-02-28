@@ -3,14 +3,13 @@ import numpy as np
 from insightface.app import FaceAnalysis
 import json
 import os
-import sqlite3
+import psycopg2
 import pickle
 from cryptography.fernet import Fernet
 from ultralytics import YOLO
 
 # --- 1. CONFIGURATION & SECRETS ---
 secrets_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'gemeniFacialAnalysis', 'secrets.json')
-db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'users.db')
 
 try:
     with open(secrets_path, 'r') as f:
@@ -24,14 +23,24 @@ except Exception as e:
     print("Please run generate_key.py first to create your Fernet key.")
     exit(1)
 
-# --- 2. DATABASE SETUP ---
+# --- 2. DATABASE SETUP (PostgreSQL) ---
 def init_db():
-    conn = sqlite3.connect(db_path)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, embedding BLOB)''')
-    conn.commit()
-    return conn
+    try:
+        conn = psycopg2.connect(
+            dbname="facial_recognition",
+            user=os.environ.get('USER', 'postgres'), # Uses current macOS user by default
+            host="localhost",
+            port="5432"
+        )
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS users
+                     (id SERIAL PRIMARY KEY, name TEXT UNIQUE, embedding BYTEA)''')
+        conn.commit()
+        return conn
+    except Exception as e:
+        print(f"CRITICAL ERROR connecting to PostgreSQL: {e}")
+        print("Please ensure PostgreSQL is running and the 'facial_recognition' database exists.")
+        exit(1)
 
 def save_user(conn, name, embedding):
     # Serialize and encrypt the embedding
@@ -39,11 +48,18 @@ def save_user(conn, name, embedding):
     encrypted_embedding = cipher_suite.encrypt(serialized_embedding)
     try:
         c = conn.cursor()
-        c.execute("INSERT OR REPLACE INTO users (name, embedding) VALUES (?, ?)", (name, encrypted_embedding))
+        # PostgreSQL uses ON CONFLICT instead of INSERT OR REPLACE
+        c.execute("""
+            INSERT INTO users (name, embedding) 
+            VALUES (%s, %s)
+            ON CONFLICT (name) 
+            DO UPDATE SET embedding = EXCLUDED.embedding
+        """, (name, psycopg2.Binary(encrypted_embedding)))
         conn.commit()
         return True
     except Exception as e:
         print(f"Error saving user: {e}")
+        conn.rollback() # Important in postgres
         return False
 
 def load_users(conn):
@@ -51,7 +67,9 @@ def load_users(conn):
     c.execute("SELECT name, embedding FROM users")
     users = {}
     for row in c.fetchall():
-        name, encrypted_embedding = row
+        name = row[0]
+        # psycopg2 returns a memoryview for BYTEA, need to convert to bytes
+        encrypted_embedding = bytes(row[1]) 
         try:
             decrypted_embedding = cipher_suite.decrypt(encrypted_embedding)
             embedding = pickle.loads(decrypted_embedding)

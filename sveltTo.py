@@ -38,3 +38,6 @@ async def websocket_endpoint(websocket):
                 base_64_data = data.split(",")[1]
             else:
                 base_64_data = data
+
+    except Exception as e:
+        print(f"WebSocket connection error: {e}")

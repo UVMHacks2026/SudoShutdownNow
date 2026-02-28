@@ -1,0 +1,14 @@
+fastapi==0.119.0
+uvicorn[standard]==0.37.0
+sqlalchemy==2.0.44
+psycopg2-binary==2.9.11
+pydantic==2.12.2
+pydantic-settings==2.11.0
+python-dotenv==1.1.1
+python-multipart==0.0.20
+email-validator==2.3.0
+httpx==0.28.1
+sentry-sdk==2.42.0
+requests
+numpy
+opencv-python

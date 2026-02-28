@@ -192,12 +192,12 @@ def loadEmployees(reader, splitName=False):
     return employees
 
 if __name__ == "__main__":
-    # employees = formatReadEmployeeData("EmployeeDataTest.csv")
+    employees = formatReadEmployeeData("EmployeeDataTest.csv")
 
-    # if employees:
-    #     for employee in employees:
-    #         print(employees[employee])
-    #         print(employees[employee].getShifts())
+    if employees:
+        for employee in employees:
+            print(employees[employee])
+            print(employees[employee].getShifts())
         
     employees = readEmployeeData("EmployeeData.csv")
     if employees:

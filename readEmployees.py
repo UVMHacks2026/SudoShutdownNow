@@ -45,7 +45,6 @@ def formatReadEmployeeData(fileName):
     try:
         with open(fileName, newline="") as csvFile:
             reader = csv.DictReader(csvFile)
-            print(reader.fieldnames)
 
             attempts = 4
             response = ""
@@ -68,13 +67,22 @@ def formatReadEmployeeData(fileName):
                             print(f"Attempts remaining: {attempts}")
                             try:
                                 wait_time = int(float(str(e).split("retry in ")[1].split("s")[0]))
+
                             except:
                                 wait_time = 10
-                            time.sleep(11)
-                    else: geminiWorks = False
+                                
+                            # If the wait time is long, Gemini is disabled so the program does not freeze
+                            if wait_time > 67:
+                                wait_time = 0
+                                attempts = 0
+                            print(f"Wait Time: {attempts}")
+
+                            time.sleep(wait_time)
+                    else: 
+                        geminiWorks = False
             
             if geminiWorks and response:     
-                print(response)
+                print(f"Reponse: {response}")
 
     except FileNotFoundError:
         print(f"Could not load the file: {fileName}")

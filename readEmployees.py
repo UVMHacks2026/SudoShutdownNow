@@ -193,6 +193,54 @@ def loadEmployees(reader, splitName=False):
         employees[id] = Employee.Employee(firstName, lastName, id, imageId, email, shiftsOut)
     return employees
 
+def summarizeEmployee(employee):
+    attempts = 4
+    response = ""
+    while attempts:
+        try:
+            # The fields are supposes to look like ['firstName', 'lastName', 'id', 'imageId', 'email', 'shifts']
+            prompt = """
+                        Tell us about the employees performance based off the data I give you.
+                        There exists no other data, go off only what I give.
+                        PLEASE JUST MAKE IT WORK. 
+                        Don't tell me there is not enough info, take an educated guess.
+                        Give your reponse with only text and punctuation.
+                        Sound confident.
+                    """
+            if DEBUG_PRINTS: print("Before response")
+            response = client.models.generate_content(contents= prompt + str(employee) + str(employee.getShifts), model=MODEL_ID)
+            print(response.text.strip())
+            attempts = 0
+        except errors.ClientError as e:
+            if DEBUG_PRINTS: print(f"Gemini error code: {e}")
+            if e.code == 429 and attempts:
+                if "limit: 0" in str(e):
+                    attempts = 0
+                    if DEBUG_PRINTS:
+                        print("Gemini limit exceeded!")
+                if attempts:
+                    attempts -= 1
+                    try:
+                        waitTime = int(float(str(e).split("retry in ")[1].split("s")[0])) + 1
+
+                    except:
+                        waitTime = 10
+                        
+                    # If the wait time is long, Gemini is disabled so the program does not freeze
+                    if waitTime > 67:
+                        waitTime = 0
+                        attempts = 0
+
+                    if DEBUG_PRINTS:
+                        print(f"Attempts remaining: {attempts}")
+                        print(f"Wait Time: {waitTime}")
+
+                    time.sleep(waitTime)
+            else: 
+                geminiWorks = False
+                attempts = 0
+                if DEBUG_PRINTS: 
+                    print(f"Gemini Disabled!")
 if __name__ == "__main__":
     running = True
     while running:
@@ -217,6 +265,13 @@ if __name__ == "__main__":
             for employee in employees:
                 print(employees[employee])
                 print(employees[employee].getShifts())
+        while True:
+            choice2 = input("Enter employee id to summarize or continue?(enter ID or n to continue): ")
+
+            if choice2 == "n":
+                break
+            elif choice2 in employees:
+                summarizeEmployee(employees[choice2])
         
         while True:
             exit = input("Would you like to enter another file? (Enter y or n): ")

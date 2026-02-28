@@ -90,8 +90,8 @@ print(f"Loaded {len(authorized_users)} authorized users from database.")
 def compute_similarity(embedding1, embedding2):
     return np.dot(embedding1, embedding2) / (np.linalg.norm(embedding1) * np.linalg.norm(embedding2))
 
-print("Loading InsightFace model...")
-face_app = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider'])
+print("Loading InsightFace model (Memory Optimized)...")
+face_app = FaceAnalysis(name='buffalo_l', allowed_modules=['detection', 'recognition'], providers=['CPUExecutionProvider'])
 face_app.prepare(ctx_id=0, det_size=(640, 640))
 
 print("Loading YOLOv8n Body Tracking model...")

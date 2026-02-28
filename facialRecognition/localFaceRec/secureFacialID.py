@@ -1,279 +1,217 @@
+import cv2
 import numpy as np
-import psycopg2
-from psycopg2.extras import execute_values
-import os
-from dotenv import load_dotenv
-from typing import Dict, Tuple, Optional
-import logging
 from insightface.app import FaceAnalysis
+import json
+import os
+import psycopg2
+import pickle
+import base64
+from cryptography.fernet import Fernet
+from ultralytics import YOLO
 
-# Load environment variables
-load_dotenv()
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# --- DATABASE CONFIGURATION ---
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/sudoshutdown")
-SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.40))
-FACE_MODEL = os.getenv("FACE_MODEL", "buffalo_l")  # lightweight model
-GPU_ENABLED = os.getenv("GPU_ENABLED", "false").lower() == "true"
-
-# --- GLOBAL VARIABLES ---
-authorized_users: Dict[str, np.ndarray] = {}
-last_known_authorized_centers: Dict[str, Tuple[int, int]] = {}
-conn = None
-face_app = None
-
-
-# --- DATABASE INITIALIZATION ---
-def init_db():
-    """Initialize database connection and create tables if needed."""
-    global conn
-    try:
-        conn = psycopg2.connect(DATABASE_URL)
-        logger.info("Database connection established")
+class FacialSecuritySystem:
+    def __init__(self):
+        # --- 1. CONFIGURATION & SECRETS ---
+        secrets_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'gemeniFacialAnalysis', 'secrets.json')
         
-        # Create users table if it doesn't exist
-        with conn.cursor() as cursor:
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(255) UNIQUE NOT NULL,
-                    embedding BYTEA NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
-            
-            # Create index on name for faster lookups
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_users_name ON users(name);
-            """)
-            
-        conn.commit()
-        logger.info("Database tables initialized")
-    
-    except psycopg2.Error as e:
-        logger.error(f"Database connection error: {e}")
-        raise
+        try:
+            with open(secrets_path, 'r') as f:
+                secrets = json.load(f)
+            self.fernet_key = secrets.get("FERNET_KEY")
+            if not self.fernet_key:
+                raise ValueError("FERNET_KEY not found in secrets.json")
+            self.cipher_suite = Fernet(self.fernet_key.encode('utf-8'))
+        except Exception as e:
+            raise RuntimeError(f"CRITICAL ERROR loading secrets: {e}\nPlease run generate_key.py first to create your Fernet key.")
 
+        # --- 2. DATABASE SETUP ---
+        self.conn = self._init_db()
+        self.authorized_users = self._load_users()
+        print(f"[SecuritySystem] Loaded {len(self.authorized_users)} authorized users from database.")
 
-def load_users():
-    global authorized_users, conn
-        
-    if conn is None:
-        init_db()
-        
-    authorized_users.clear()
-        
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT name, embedding FROM users;")
-            rows = cursor.fetchall()
-            
-        conn.commit()  # Close the read transaction to avoid Idle-In-Transaction
-                
-        for name, embedding_bytes in rows:
-            # Deserialize embedding from bytes safely using numpy
-            embedding = np.frombuffer(embedding_bytes, dtype=np.float32)
-            authorized_users[name] = embedding
-            logger.info(f"Loaded user: {name}")
-            
-        logger.info(f"Total users loaded: {len(authorized_users)}")
-        
-    except psycopg2.Error as e:
-        logger.error(f"Error loading users: {e}")
-        if conn:
-            conn.rollback()
-        raise
+        # --- 3. INFRASTRUCTURE SETUP ---
+        print("[SecuritySystem] Loading InsightFace model (Memory Optimized)...")
+        self.face_app = FaceAnalysis(name='buffalo_l', allowed_modules=['detection', 'recognition'], providers=['CPUExecutionProvider'])
+        self.face_app.prepare(ctx_id=0, det_size=(640, 640))
 
+        print("[SecuritySystem] Loading YOLOv8n Body Tracking model...")
+        self.body_model = YOLO("yolov8n.pt") 
+        
+        # State tracking for fallback system
+        self.last_known_authorized_centers = {} # name -> (x,y)
+        
+    def _init_db(self):
+        try:
+            conn = psycopg2.connect(
+                dbname="facial_recognition",
+                user=os.environ.get('USER', 'postgres'),
+                host="localhost",
+                port="5432"
+            )
+            c = conn.cursor()
+            c.execute('''CREATE TABLE IF NOT EXISTS users
+                         (id SERIAL PRIMARY KEY, name TEXT UNIQUE, embedding BYTEA)''')
+            conn.commit()
+            return conn
+        except Exception as e:
+            raise RuntimeError(f"CRITICAL ERROR connecting to PostgreSQL: {e}")
 
-def save_user(name: str, embedding: np.ndarray) -> bool:
-    global conn
-    if conn is None:
-        init_db()
-        
-    try:
-        # Validate embedding
-        if not isinstance(embedding, np.ndarray):
-            embedding = np.array(embedding)
-        
-        if embedding.shape[0] != 512:  # InsightFace uses 512-dim embeddings
-            logger.warning(f"Unexpected embedding dimension: {embedding.shape[0]}")
-        
-        # Serialize embedding to bytes securely using numpy
-        embedding_bytes = embedding.astype(np.float32).tobytes()
-        
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """
+    def _save_user(self, name, embedding):
+        serialized_embedding = pickle.dumps(embedding)
+        encrypted_embedding = self.cipher_suite.encrypt(serialized_embedding)
+        try:
+            c = self.conn.cursor()
+            c.execute("""
                 INSERT INTO users (name, embedding) 
                 VALUES (%s, %s)
-                ON CONFLICT (name) DO UPDATE 
-                SET embedding = EXCLUDED.embedding, updated_at = CURRENT_TIMESTAMP;
-                """,
-                (name, embedding_bytes)
-            )
-        conn.commit()
-        
-        # Update in-memory dictionary so it's instantly available
-        authorized_users[name] = embedding.astype(np.float32)
-        
-        logger.info(f"User {name} saved successfully")
-        return True
-    
-    except psycopg2.Error as e:
-        logger.error(f"Error saving user {name}: {e}")
-        if conn:
-            conn.rollback()
-        return False
-    except Exception as e:
-        logger.error(f"Unexpected error saving user {name}: {e}")
-        if conn:
-            conn.rollback()
-        return False
-
-# Function to try to compute similarity between two embeddings
-def compute_similarity(embedding1: np.ndarray, embedding2: np.ndarray) -> float:
-    try:
-        # Ensure inputs are numpy arrays
-        if not isinstance(embedding1, np.ndarray):
-            embedding1 = np.array(embedding1)
-        if not isinstance(embedding2, np.ndarray):
-            embedding2 = np.array(embedding2)
-        
-        # InsightFace features are already L2 normalized. 
-        # The dot product is equivalent to cosine similarity.
-        similarity = np.dot(embedding1, embedding2)
-        similarity = np.clip(similarity, -1.0, 1.0)  # Ensure the value is within valid cosine similarity range
-        return float(similarity)
-    
-    except Exception as e:
-        logger.error(f"Error computing similarity: {e}")
-        return 0.0
-
-
-def init_face_app():
-    # Initialize InsightFace recognition model.
-    global face_app
-    
-    try:
-        logger.info(f"Initializing face recognition model: {FACE_MODEL}")
-        
-        # Create FaceAnalysis app
-        face_app = FaceAnalysis(
-            name=FACE_MODEL,
-            root=os.path.expanduser("~/.insightface"),
-            providers=['CUDAExecutionProvider', 'CPUExecutionProvider'] if GPU_ENABLED else ['CPUExecutionProvider']
-        )
-        
-        # Prepare the model (required for insightface)
-        face_app.prepare(ctx_id=0 if GPU_ENABLED else -1, det_size=(640, 640))
-        
-        logger.info("Face recognition model initialized successfully")
-    
-    except Exception as e:
-        logger.error(f"Error initializing face app: {e}")
-        raise
-
-
-def get_face_embedding(frame: np.ndarray) -> Optional[np.ndarray]:
-    try:
-        if face_app is None:
-            logger.error("Face app not initialized")
+                RETURNING id
+            """, (name, psycopg2.Binary(encrypted_embedding)))
+            new_id = c.fetchone()[0]
+            self.conn.commit()
+            return new_id
+        except Exception as e:
+            print(f"Error saving user: {e}")
+            self.conn.rollback()
             return None
+
+    def _load_users(self):
+        c = self.conn.cursor()
+        c.execute("SELECT name, embedding FROM users")
+        users = {}
+        for row in c.fetchall():
+            name = row[0]
+            encrypted_embedding = bytes(row[1]) 
+            try:
+                decrypted_embedding = self.cipher_suite.decrypt(encrypted_embedding)
+                embedding = pickle.loads(decrypted_embedding)
+                users[name] = embedding
+            except Exception as e:
+                print(f"Error decrypting user {name}: {e}")
+        return users
+
+    def _compute_similarity(self, embedding1, embedding2):
+        return np.dot(embedding1, embedding2) / (np.linalg.norm(embedding1) * np.linalg.norm(embedding2))
+
+    def _decode_base64_image(self, base64_str: str):
+        if "," in base64_str:
+            base64_str = base64_str.split(",")[1]
+        try:
+            img_data = base64.b64decode(base64_str)
+            np_arr = np.frombuffer(img_data, np.uint8)
+            img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            if img is None:
+                raise ValueError("Failed to decode image")
+            return img
+        except Exception as e:
+            raise ValueError(f"Invalid base64 image data: {str(e)}")
+
+
+    # ==========================================
+    # PUBLIC EXPORTED FUNCTIONS
+    # ==========================================
+
+    def register_user(self, base64_img: str, name: str) -> dict:
+        """
+        Takes a base64 JPG and a name, and registers the face as a new authorized employee.
+        """
+        try:
+            frame = self._decode_base64_image(base64_img)
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+            
+        faces = self.face_app.get(frame)
+        if len(faces) != 1:
+            return {"success": False, "error": f"Found {len(faces)} faces in frame, need exactly 1."}
         
-        # Detect faces in the frame
-        faces = face_app.get(frame)
-        
-        if len(faces) == 0:
-            return None
-        
-        # Return embedding of the first (most prominent) face
-        # This embedding is already L2-normalized by InsightFace
         embedding = faces[0].normed_embedding
-        return embedding
-    
-    except Exception as e:
-        logger.error(f"Error extracting face embedding: {e}")
-        return None
-
-
-def match_face(embedding: np.ndarray, threshold: float = SIMILARITY_THRESHOLD) -> Tuple[Optional[str], float]:
-    best_match_name = None
-    best_similarity = 0.0
-    
-    for name, registered_embedding in authorized_users.items():
-        similarity = compute_similarity(embedding, registered_embedding)
         
-        if similarity > best_similarity:
-            best_similarity = similarity
-            best_match_name = name if similarity >= threshold else None
-    
-    return best_match_name, best_similarity
+        # Check if they already exist so we don't duplicate
+        for existing_name, auth_emb in self.authorized_users.items():
+            sim = self._compute_similarity(auth_emb, embedding)
+            if sim > 0.40:
+                return {"success": False, "error": f"Face already registered as {existing_name}"}
 
+        new_id = self._save_user(name, embedding)
+        if new_id:
+            self.authorized_users[name] = embedding
+            return {"success": True, "employee_id": new_id, "name": name}
+        else:
+            return {"success": False, "error": "Database write failure. Name may already exist."}
 
-def delete_user(name: str) -> bool:
-    global conn
-    if conn is None:
-        init_db()
-        
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("DELETE FROM users WHERE name = %s;", (name,))
-        conn.commit()
-        
-        if name in authorized_users:
-            del authorized_users[name]
-        
-        logger.info(f"User {name} deleted successfully")
-        return True
-    
-    except psycopg2.Error as e:
-        logger.error(f"Error deleting user {name}: {e}")
-        if conn:
-            conn.rollback()
-        return False
-
-
-def get_all_users() -> Dict[str, dict]:
-    global conn
-    if conn is None:
-        init_db()
-        
-    try:
-        users_info = {}
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT id, name, created_at, updated_at FROM users;")
-            rows = cursor.fetchall()
+    def process_frame(self, base64_img: str) -> dict:
+        """
+        Takes a base64 JPG, searches for authorized employees, and handles fallback body tracking.
+        Returns whether an employee is present, and their name/id if so.
+        """
+        try:
+            frame = self._decode_base64_image(base64_img)
+        except ValueError as e:
+            return {"error": str(e)}
             
-        conn.commit()  # Close the read transaction to avoid Idle-In-Transaction
-            
-        for user_id, name, created_at, updated_at in rows:
-            users_info[name] = {
-                "id": user_id,
-                "created_at": str(created_at),
-                "updated_at": str(updated_at)
-            }
+        response_data = {
+            "is_employee_present": False,
+            "employee_name": None,
+            "system_status": "SECURE",
+            "faces_detected": 0
+        }
         
-        return users_info
-    
-    except psycopg2.Error as e:
-        logger.error(f"Error fetching users: {e}")
-        if conn:
-            conn.rollback()
-        return {}
+        # 1. Run YOLO Body Detection
+        body_results = self.body_model(frame, classes=[0], verbose=False)
+        bodies = []
+        if len(body_results) > 0:
+            bodies = body_results[0].boxes.xyxy.cpu().numpy().astype(int)
+            
+        # 2. Run Facial Detection
+        faces = self.face_app.get(frame)
+        response_data["faces_detected"] = len(faces)
+        currently_seen_authorized = []
 
-# --- INITIALIZATION ---
-if __name__ != "__main__":
-    # Initialize on module import
-    try:
-        init_db()
-        init_face_app()
-        load_users()
-        logger.info("Facial recognition system initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize facial recognition system: {e}")
-        raise
+        # Process all faces
+        for face in faces:
+            face_bbox = face.bbox.astype(int).tolist()
+            face_center = (int((face_bbox[0] + face_bbox[2])/2), int((face_bbox[1] + face_bbox[3])/2))
+            
+            best_match_name = None
+            best_sim = 0.0
+            
+            # Compare against DB
+            for name, auth_emb in self.authorized_users.items():
+                sim = self._compute_similarity(auth_emb, face.normed_embedding)
+                if sim > 0.40 and sim > best_sim:
+                    best_sim = float(sim)
+                    best_match_name = name
+                    
+            if best_match_name:
+                currently_seen_authorized.append(best_match_name)
+                self.last_known_authorized_centers[best_match_name] = face_center
+                
+                # We found an employee!
+                response_data["is_employee_present"] = True
+                response_data["employee_name"] = best_match_name
+                response_data["confidence"] = best_sim
+
+        # 3. Fallback Body Tracking Logic
+        # If no face is seen, check if their body is still in the frame
+        if len(self.authorized_users) > 0 and len(currently_seen_authorized) == 0:
+            
+            for body_bbox in bodies:
+                body_center = (int((body_bbox[0] + body_bbox[2])/2), int((body_bbox[1] + body_bbox[3])/2))
+                
+                assumed_name = None
+                closest_dist = float('inf')
+                
+                for name, last_face_center in self.last_known_authorized_centers.items():
+                    dist = np.sqrt((body_center[0] - last_face_center[0])**2 + (body_center[1] - last_face_center[1])**2)
+                    if dist < 300 and dist < closest_dist:
+                        closest_dist = dist
+                        assumed_name = name
+                
+                if assumed_name:
+                    # We assume the employee is still present based on body location
+                    self.last_known_authorized_centers[assumed_name] = body_center
+                    response_data["is_employee_present"] = True
+                    response_data["employee_name"] = assumed_name
+                    response_data["system_status"] = "FALLBACK_TRACKING"
+                    break # Track one employee for now
+
+        return response_data

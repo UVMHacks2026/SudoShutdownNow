@@ -11,6 +11,7 @@ def root():
 
 def get_data():
     #TODO: Implement data retrieval logic here
+    
     # Get the employee
     return {"data": "This is some data"}
 

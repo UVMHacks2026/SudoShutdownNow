@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libgl1 \
     libgomp1 \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -18,10 +19,7 @@ COPY secureFacialID.py .
 COPY api.py .
 
 # Pre-download InsightFace model so it's baked into the image
-RUN python -c "\
-    from insightface.app import FaceAnalysis; \
-    app = FaceAnalysis(name='buffalo_l', allowed_modules=['detection','recognition'], providers=['CPUExecutionProvider']); \
-    app.prepare(ctx_id=-1, det_size=(640,640))"
+RUN python -c "from insightface.app import FaceAnalysis; app = FaceAnalysis(name='buffalo_l', allowed_modules=['detection','recognition'], providers=['CPUExecutionProvider']); app.prepare(ctx_id=-1, det_size=(640,640))"
 
 # Pre-download YOLOv8n model
 RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"

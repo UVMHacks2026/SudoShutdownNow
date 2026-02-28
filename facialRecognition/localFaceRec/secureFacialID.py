@@ -12,17 +12,19 @@ from ultralytics import YOLO
 class FacialSecuritySystem:
     def __init__(self):
         # --- 1. CONFIGURATION & SECRETS ---
-        secrets_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'gemeniFacialAnalysis', 'secrets.json')
-        
-        try:
-            with open(secrets_path, 'r') as f:
-                secrets = json.load(f)
-            self.fernet_key = secrets.get("FERNET_KEY")
-            if not self.fernet_key:
-                raise ValueError("FERNET_KEY not found in secrets.json")
-            self.cipher_suite = Fernet(self.fernet_key.encode('utf-8'))
-        except Exception as e:
-            raise RuntimeError(f"CRITICAL ERROR loading secrets: {e}\nPlease run generate_key.py first to create your Fernet key.")
+        # Check env var first (for deployed/Docker environments), fall back to secrets.json
+        fernet_key = os.environ.get("FERNET_KEY")
+        if not fernet_key:
+            secrets_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'gemeniFacialAnalysis', 'secrets.json')
+            try:
+                with open(secrets_path, 'r') as f:
+                    secrets = json.load(f)
+                fernet_key = secrets.get("FERNET_KEY")
+            except Exception:
+                pass
+        if not fernet_key:
+            raise RuntimeError("CRITICAL ERROR: FERNET_KEY not found. Set the FERNET_KEY environment variable or create secrets.json.")
+        self.cipher_suite = Fernet(fernet_key.encode('utf-8'))
 
         # --- 2. DATABASE SETUP ---
         self.conn = self._init_db()
@@ -42,12 +44,17 @@ class FacialSecuritySystem:
         
     def _init_db(self):
         try:
-            conn = psycopg2.connect(
-                dbname="facial_recognition",
-                user=os.environ.get('USER', 'postgres'),
-                host="localhost",
-                port="5432"
-            )
+            # Use DATABASE_URL env var if set (Docker/cloud), otherwise local defaults
+            database_url = os.environ.get("DATABASE_URL")
+            if database_url:
+                conn = psycopg2.connect(database_url)
+            else:
+                conn = psycopg2.connect(
+                    dbname="facial_recognition",
+                    user=os.environ.get('USER', 'postgres'),
+                    host="localhost",
+                    port="5432"
+                )
             c = conn.cursor()
             c.execute('''CREATE TABLE IF NOT EXISTS users
                          (id SERIAL PRIMARY KEY, name TEXT UNIQUE, embedding BYTEA)''')

@@ -17,7 +17,7 @@ app = FastAPI()
 
 # --- Accepted Origins for CORS ---
 origins = [
-    "http://cgswswk88cg04k4www8g8cgs.76.13.29.239.sslip.io/",
+    "http://cgswswk88cg04k4www8g8cgs.76.13.29.239.sslip.io",
     "http://localhost:5173",  # Svelte dev server
     "http://localhost:3000",
 ]

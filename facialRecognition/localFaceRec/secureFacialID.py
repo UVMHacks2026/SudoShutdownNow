@@ -36,25 +36,20 @@ class FacialSecuritySystem:
         self.face_app.prepare(ctx_id=0, det_size=(640, 640))
         
     def _init_db(self):
+        database_url = os.environ.get("DATABASE_URL")
+        if not database_url:
+            raise RuntimeError("CRITICAL ERROR: DATABASE_URL environment variable not set.")
+        
         try:
-            # Use DATABASE_URL env var if set (Docker/cloud), otherwise local defaults
-            database_url = os.environ.get("DATABASE_URL")
-            if database_url:
-                conn = psycopg2.connect(database_url)
-            else:
-                conn = psycopg2.connect(
-                    dbname="facial_recognition",
-                    user=os.environ.get('USER', 'postgres'),
-                    host="localhost",
-                    port="5432"
-                )
+            conn = psycopg2.connect(database_url)
+            # Create table if not exists (minimal check)
             c = conn.cursor()
             c.execute('''CREATE TABLE IF NOT EXISTS users
                          (id SERIAL PRIMARY KEY, name TEXT UNIQUE, embedding BYTEA)''')
             conn.commit()
             return conn
         except Exception as e:
-            raise RuntimeError(f"CRITICAL ERROR connecting to PostgreSQL: {e}")
+            raise RuntimeError(f"CRITICAL ERROR connecting to PostgreSQL via DATABASE_URL: {e}")
 
     def _save_user(self, name, embedding):
         serialized_embedding = pickle.dumps(embedding)

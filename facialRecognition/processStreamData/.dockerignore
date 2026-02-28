@@ -1,0 +1,56 @@
+# Git
+.git
+.gitignore
+.github
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv
+.env
+.env.local
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Node (if using Svelte dev)
+node_modules/
+dist/
+.svelte-kit/
+build/
+
+# Test files
+test_websocket.py
+test_module.py
+test_api.py
+test_integration.py
+
+# Documentation
+*.md
+README.md
+
+# Misc
+.env.example
+secrets.json
+*.log

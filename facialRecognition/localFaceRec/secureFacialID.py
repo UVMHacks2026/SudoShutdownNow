@@ -9,6 +9,64 @@ import base64
 from cryptography.fernet import Fernet
 from ultralytics import YOLO
 
+<<<<<<< HEAD
+# Load environment variables
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# --- DATABASE CONFIGURATION ---
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:mrAZjGkytlCIxDyYoGwGudmjvs0EssFKYwcRUar4lPitKxa5vreh7FRaOjUB6a2G@76.13.29.239:5432/postgres")
+SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.40))
+FACE_MODEL = os.getenv("FACE_MODEL", "buffalo_l")  # lightweight model
+GPU_ENABLED = os.getenv("GPU_ENABLED", "false").lower() == "true"
+
+# --- GLOBAL VARIABLES ---
+authorized_users: Dict[str, np.ndarray] = {}
+last_known_authorized_centers: Dict[str, Tuple[int, int]] = {}
+conn = None
+face_app = None
+
+
+# --- DATABASE INITIALIZATION ---
+def init_db():
+    """Initialize database connection and create tables if needed."""
+    global conn
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        logger.info("Database connection established")
+        
+        # Create users table if it doesn't exist
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR(255) UNIQUE NOT NULL,
+                        embedding BYTEA NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
+                
+                # Create index on name for faster lookups
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_users_name ON users(name);
+                """)
+                
+            conn.commit()
+            logger.info("Database tables initialized")
+        except psycopg2.Error as table_error:
+            logger.warning(f"Could not create/verify table schema: {table_error}")
+            logger.info("Proceeding with existing database schema")
+            conn.commit()
+    
+    except psycopg2.Error as e:
+        logger.error(f"Database connection error: {e}")
+        raise
+=======
 class FacialSecuritySystem:
     def __init__(self):
         # --- 1. CONFIGURATION & SECRETS ---
@@ -23,16 +81,49 @@ class FacialSecuritySystem:
             self.cipher_suite = Fernet(self.fernet_key.encode('utf-8'))
         except Exception as e:
             raise RuntimeError(f"CRITICAL ERROR loading secrets: {e}\nPlease run generate_key.py first to create your Fernet key.")
+>>>>>>> refs/remotes/origin/facialRecSoft
 
         # --- 2. DATABASE SETUP ---
         self.conn = self._init_db()
         self.authorized_users = self._load_users()
         print(f"[SecuritySystem] Loaded {len(self.authorized_users)} authorized users from database.")
 
+<<<<<<< HEAD
+def load_users():
+    global authorized_users, conn
+        
+    if conn is None:
+        init_db()
+        
+    authorized_users.clear()
+        
+    try:
+        with conn.cursor() as cursor:
+            # Try to load with current schema
+            cursor.execute("SELECT name, embedding FROM users;")
+            rows = cursor.fetchall()
+            
+        conn.commit()  # Close the read transaction to avoid Idle-In-Transaction
+                
+        for name, embedding_bytes in rows:
+            # Deserialize embedding from bytes safely using numpy
+            embedding = np.frombuffer(embedding_bytes, dtype=np.float32)
+            authorized_users[name] = embedding
+            logger.info(f"Loaded user: {name}")
+            
+        logger.info(f"Total users loaded: {len(authorized_users)}")
+        
+    except psycopg2.Error as e:
+        logger.warning(f"Error loading users (schema mismatch or table not found): {e}")
+        logger.warning("Continuing with empty user database")
+        if conn:
+            conn.rollback()
+=======
         # --- 3. INFRASTRUCTURE SETUP ---
         print("[SecuritySystem] Loading InsightFace model (Memory Optimized)...")
         self.face_app = FaceAnalysis(name='buffalo_l', allowed_modules=['detection', 'recognition'], providers=['CPUExecutionProvider'])
         self.face_app.prepare(ctx_id=0, det_size=(640, 640))
+>>>>>>> refs/remotes/origin/facialRecSoft
 
         print("[SecuritySystem] Loading YOLOv8n Body Tracking model...")
         self.body_model = YOLO("yolov8n.pt") 
@@ -166,6 +257,19 @@ class FacialSecuritySystem:
         response_data["faces_detected"] = len(faces)
         currently_seen_authorized = []
 
+<<<<<<< HEAD
+# --- INITIALIZATION ---
+if __name__ != "__main__":
+    # Initialize on module import
+    try:
+        init_db()
+        init_face_app()
+        load_users()
+        logger.info("Facial recognition system initialized successfully")
+    except Exception as e:
+        logger.warning(f"Failed to initialize facial recognition system: {e}")
+        logger.warning("System will run in degraded mode without database connectivity")
+=======
         # Process all faces
         for face in faces:
             face_bbox = face.bbox.astype(int).tolist()
@@ -215,3 +319,4 @@ class FacialSecuritySystem:
                     break # Track one employee for now
 
         return response_data
+>>>>>>> refs/remotes/origin/facialRecSoft

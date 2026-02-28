@@ -5,13 +5,10 @@ import os
 CSV_FILE_PATH = "EmployeeData.csv"
 
 def append_to_csv(first_name, last_name, employee_id, image_id, email, shifts):
-    """Appends a new employee row to the local EmployeeData.csv file."""
     # Check if the file already exists so we know whether to write the header row
     file_exists = os.path.exists(CSV_FILE_PATH)
     
     try:
-        # If the file exists, we want to ensure we are starting on a fresh line.
-        # We can check if the file ends with a newline character before appending.
         if file_exists and os.path.getsize(CSV_FILE_PATH) > 0:
             with open(CSV_FILE_PATH, 'rb') as f:
                 f.seek(-1, os.SEEK_END)
@@ -19,7 +16,7 @@ def append_to_csv(first_name, last_name, employee_id, image_id, email, shifts):
                     with open(CSV_FILE_PATH, 'a') as text_file:
                         text_file.write('\n')
         
-        # Open in 'a' (append) mode. 'newline=""' is recommended for csv.writer
+        # Open in 'a' (append) mode
         with open(CSV_FILE_PATH, mode='a', newline='') as file:
             writer = csv.writer(file)
             
@@ -27,7 +24,7 @@ def append_to_csv(first_name, last_name, employee_id, image_id, email, shifts):
             if not file_exists:
                 writer.writerow(['firstName', 'lastName', 'id', 'imageId', 'email', 'shifts'])
             
-            # Write the new employee data row (this automatically adds a newline at the end)
+            # Write the new employee data row 
             writer.writerow([first_name, last_name, employee_id, image_id, email, shifts])
             print(f"✅ Appended {first_name} {last_name} ({employee_id}) to a new line in {CSV_FILE_PATH}")
             return True
@@ -38,7 +35,6 @@ def append_to_csv(first_name, last_name, employee_id, image_id, email, shifts):
 
 
 def add_new_employee():
-    """Interactive prompt to add a new employee to the CSV."""
     print("\n--- 📝 ADD NEW EMPLOYEE ---")
     first_name = input("Enter First Name: ").strip()
     last_name = input("Enter Last Name: ").strip()
@@ -52,7 +48,6 @@ def add_new_employee():
 
 
 def view_all_employees():
-    """Reads and displays all employees currently in the CSV file."""
     if not os.path.exists(CSV_FILE_PATH):
         print(f"\n⚠️ The file {CSV_FILE_PATH} does not exist yet.")
         return
@@ -100,6 +95,31 @@ def view_all_employees():
                     
     except Exception as e:
         print(f"❌ Failed to read {CSV_FILE_PATH}: {e}")
+
+
+# --- INTERACTIVE TERMINAL APP ---
+if __name__ == "__main__":
+    print("\n" + "="*50)
+    print("🛠️  LOCAL CSV EMPLOYEE MANAGER 🛠️")
+    print("="*50)
+    
+    while True:
+        print("\nSelect an action:")
+        print("1. Add a New Employee to CSV")
+        print("2. View All Employees in CSV")
+        print("3. Exit")
+        
+        choice = input("\nEnter your choice (1/2/3): ").strip()
+        
+        if choice == '1':
+            add_new_employee()
+        elif choice == '2':
+            view_all_employees()
+        elif choice == '3':
+            print("Goodbye!")
+            break
+        else:
+            print("Invalid choice. Please enter 1, 2, or 3.")
 
 
 # --- INTERACTIVE TERMINAL APP ---

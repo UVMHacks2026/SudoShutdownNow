@@ -20,21 +20,3 @@ def verify_auth(Authorization: str = Header(...)) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid API key"
         )
-
-
-def verify_admin(
-    x_user_id: str = Header(...),
-    db: Session = Depends(get_db)
-) -> None:
-    from app.models.user import User
-    user = db.get(User, x_user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    if not user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
-        )
